@@ -135,7 +135,7 @@
 
 <body>
     <div id="pad">
-        <span></span>
+        <button data-dir="pause" title="Dừng / tiếp tục xoay trái tim (P)">⏸</button>
         <button data-dir="up" title="Xoay lên (↑ / W)">↑</button>
         <span></span>
         <button data-dir="left" title="Xoay trái (← / A)">←</button>
@@ -164,7 +164,7 @@
 
     <script type="module">
         import * as THREE from "three";
-        import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+        import { TrackballControls } from "three/addons/controls/TrackballControls.js";
         import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
         import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
         import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
@@ -190,7 +190,7 @@
         let scene = new THREE.Scene();
         scene.background = new THREE.Color(0x050008);
         let camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 2000);
-        camera.position.set(0, 10, 28);
+        camera.position.set(0, 12, 30);
         let renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
         renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -202,14 +202,22 @@
         let bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), BLOOM_STRENGTH, 0.5, 0.15);
         composer.addPass(bloom);
 
-        let controls = new OrbitControls(camera, renderer.domElement);
-        controls.target.set(0, 3, 0);
-        controls.enableDamping = true;
-        controls.enablePan = false;
-        controls.minDistance = 6;
+        // Free 360° rotation in every direction, centered on the heart (scale + chest)
+        const FOCUS = new THREE.Vector3(0, 8, 0);
+        let controls = new TrackballControls(camera, renderer.domElement);
+        controls.target.copy(FOCUS);
+        controls.rotateSpeed = 2.5;
+        controls.zoomSpeed = 1.2;
+        controls.noPan = true;
+        controls.dynamicDampingFactor = 0.12;
+        controls.minDistance = 3;
         controls.maxDistance = 90;
+        controls.keys = [null, null, null]; // don't hijack A/S/D (used for rotation keys)
         controls.enabled = false; // locked until the intro is started
         controls.update();
+        controls.target0.copy(controls.target);
+        controls.position0.copy(camera.position);
+        controls.up0.copy(camera.up);
 
         let gu = {
             time: { value: 0 },
@@ -223,6 +231,7 @@
             renderer.setSize(innerWidth, innerHeight);
             composer.setSize(innerWidth, innerHeight);
             gu.scale.value = innerHeight * renderer.getPixelRatio() / 2;
+            controls.handleResize();
         });
 
         // ---------- helpers ----------
@@ -334,8 +343,13 @@
         });
 
         // Everything the arrow keys / buttons rotate lives in this pivot
+        // Rotation happens around the heart center (FOCUS) so it stays in view
         let pivot = new THREE.Group();
+        pivot.position.copy(FOCUS);
         scene.add(pivot);
+        let world = new THREE.Group();
+        world.position.copy(FOCUS).negate();
+        pivot.add(world);
 
         // ---------- background stars (always visible) ----------
         {
@@ -385,7 +399,7 @@
                 b.add(Math.cos(a) * r, gauss() * 0.2, Math.sin(a) * r, [1, 0.6, 0.3].map(v => v * rand(0.4, 0.8)), rand(0.6, 1.6), Math.random() * 0.5, 0.2);
             }
             galaxy = b.build(makePointMaterial(0.12));
-            pivot.add(galaxy);
+            world.add(galaxy);
         }
 
         // ---------- particle heart ----------
@@ -442,55 +456,105 @@
                     shell ? rand(0.9, 1.8) : rand(0.6, 1.3), rand(0.55, 1), 0.08, n);
             }
             heart = b.build(makePointMaterial(0.13, { center: new THREE.Vector3(0, HEART_Y, 0) }));
-            pivot.add(heart);
+            world.add(heart);
         }
 
-        // ---------- golden Libra scale with a treasure chest, inside the heart ----------
-        const BASE_Y = 4.2, PIVOT_Y = 10, PILLAR_TOP = 10.5, BEAM_L = 3.3, CHAIN_L = 2.6, PAN_R = 1.1;
+        // ---------- ornate golden Libra scale with a treasure chest, inside the heart ----------
+        const BASE_Y = 4.3, PIVOT_Y = 10, PILLAR_TOP = 10.5, BEAM_L = 3.3, CHAIN_L = 2.5, PAN_R = 1.25;
         let beamGroup, pans = [];
         {
-            let mat = makePointMaterial(0.11);
-            let gold = s => [1, 0.78, 0.3].map(v => v * s);
-            let P = (b, x, y, z, c, size = rand(0.7, 1.4)) => b.add(x, y, z, c, size, rand(0.75, 1), 0.03);
-            let line = (b, a, c, count, col, thick = 0.04) => {
+            let mat = makePointMaterial(0.1);
+            let gold = s => [1, 0.78, 0.32].map(v => v * s);
+            let goldLit = () => gold(rand(0.55, 0.85));
+            let shine = () => [1, 0.92, 0.65].map(v => v * rand(0.8, 1));
+            let P = (b, x, y, z, c, n, size = rand(0.7, 1.3)) => b.add(x, y, z, c, size, rand(0.75, 1), 0.02, n);
+
+            // Surface of revolution from a smooth (r, y) profile, with normals and bright ridges
+            let lathe = (b, profile, count, opts = {}) => {
+                let pts = new THREE.SplineCurve(profile.map(([r, y]) => new THREE.Vector2(r, y))).getSpacedPoints(400);
+                let w = [], total = 0;
+                for (let i = 0; i < pts.length - 1; i++) {
+                    let a = pts[i], c = pts[i + 1];
+                    total += a.distanceTo(c) * ((a.x + c.x) / 2 + 0.05);
+                    w.push(total);
+                }
+                let sign = opts.flip ? -1 : 1;
+                for (let i = 0; i < count; i++) {
+                    let r = Math.random() * total, j = 0;
+                    while (w[j] < r) j++;
+                    let a = pts[j], c = pts[j + 1], t = Math.random();
+                    let rad = a.x + (c.x - a.x) * t, y = a.y + (c.y - a.y) * t;
+                    let dr = c.x - a.x, dy = c.y - a.y, len = Math.hypot(dr, dy) || 1;
+                    let nr = sign * dy / len, ny = -sign * dr / len;
+                    let th = Math.random() * Math.PI * 2, ct = Math.cos(th), st = Math.sin(th);
+                    P(b, ct * rad, y, st * rad, opts.color ? opts.color() : goldLit(), [ct * nr, ny, st * nr]);
+                }
+                // ridges = local maxima of the radius
+                for (let i = 2; i < pts.length - 2; i++) {
+                    if (pts[i].x > pts[i - 2].x + 1e-3 && pts[i].x > pts[i + 2].x + 1e-3 && pts[i].x >= pts[i - 1].x && pts[i].x >= pts[i + 1].x) {
+                        let n = Math.round(60 + pts[i].x * 160);
+                        for (let k = 0; k < n; k++) {
+                            let th = Math.random() * Math.PI * 2;
+                            P(b, Math.cos(th) * pts[i].x, pts[i].y, Math.sin(th) * pts[i].x, shine(), [Math.cos(th), 0, Math.sin(th)]);
+                        }
+                    }
+                }
+            };
+
+            // Tube along a 3D curve (beam, scrolls)
+            let tube = (b, points, radius, count, color = goldLit) => {
+                let curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
+                let p = new THREE.Vector3(), tg = new THREE.Vector3(), n1 = new THREE.Vector3(), n2 = new THREE.Vector3();
+                let Z = new THREE.Vector3(0, 0, 1), Y = new THREE.Vector3(0, 1, 0);
                 for (let i = 0; i < count; i++) {
                     let t = Math.random();
-                    P(b, a[0] + (c[0] - a[0]) * t + gauss() * thick, a[1] + (c[1] - a[1]) * t + gauss() * thick,
-                        a[2] + (c[2] - a[2]) * t + gauss() * thick, col);
-                }
-            };
-            let ring = (b, cx, cy, cz, r, count, col) => {
-                for (let i = 0; i < count; i++) {
+                    curve.getPointAt(t, p);
+                    curve.getTangentAt(t, tg);
+                    n1.crossVectors(tg, Math.abs(tg.z) > 0.9 ? Y : Z).normalize();
+                    n2.crossVectors(tg, n1);
                     let a = Math.random() * Math.PI * 2;
-                    P(b, cx + Math.cos(a) * r, cy + gauss() * 0.03, cz + Math.sin(a) * r, col);
+                    let ox = n1.x * Math.cos(a) + n2.x * Math.sin(a);
+                    let oy = n1.y * Math.cos(a) + n2.y * Math.sin(a);
+                    let oz = n1.z * Math.cos(a) + n2.z * Math.sin(a);
+                    let r = typeof radius === "function" ? radius(t) : radius;
+                    P(b, p.x + ox * r, p.y + oy * r, p.z + oz * r, color(), [ox, oy, oz]);
                 }
             };
-            let disc = (b, cx, cy, cz, r, count, col) => {
-                for (let i = 0; i < count; i++) {
-                    let a = Math.random() * Math.PI * 2, p = r * Math.sqrt(Math.random());
-                    P(b, cx + Math.cos(a) * p, cy, cz + Math.sin(a) * p, col);
+            let spiral = (cx, cy, r0, a0, turns, shrink, dir, n = 40) => {
+                let out = [];
+                for (let i = 0; i <= n; i++) {
+                    let s = i / n, a = a0 - dir * s * turns * Math.PI * 2, r = r0 * (1 - shrink * s);
+                    out.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r, 0]);
                 }
+                return out;
             };
-            let ball = (b, cx, cy, cz, r, count, col) => {
+            let ball = (b, cx, cy, cz, r, count, color = shine) => {
                 let v = new THREE.Vector3();
                 for (let i = 0; i < count; i++) {
-                    v.randomDirection().multiplyScalar(r);
-                    P(b, cx + v.x, cy + v.y, cz + v.z, col);
+                    v.randomDirection();
+                    P(b, cx + v.x * r, cy + v.y * r, cz + v.z * r, color(), [v.x, v.y, v.z]);
                 }
             };
 
-            // static part: base, pillar, chest
+            // ---- static part: bell base + baluster pillar + cup ----
             let s = new PointBuilder();
-            disc(s, 0, BASE_Y, 0, 1.2, 900, gold(0.45));
-            ring(s, 0, BASE_Y, 0, 1.2, 500, gold(1));
-            disc(s, 0, BASE_Y + 0.3, 0, 0.7, 400, gold(0.5));
-            ring(s, 0, BASE_Y + 0.3, 0, 0.7, 300, gold(1));
-            line(s, [0, BASE_Y, 0], [0, PILLAR_TOP, 0], 1600, gold(0.9), 0.07);
-            ring(s, 0, PIVOT_Y, 0, 0.22, 150, gold(1));
+            const H = (PILLAR_TOP - BASE_Y) / 6.5;
+            let baluster = [
+                [1.05, 0], [1.08, 0.07], [1.0, 0.15], [0.88, 0.24], [0.7, 0.38], [0.52, 0.58], [0.42, 0.78],
+                [0.54, 0.93], [0.56, 1.03], [0.38, 1.18], [0.28, 1.34], [0.4, 1.58], [0.48, 1.78], [0.43, 1.98],
+                [0.26, 2.18], [0.36, 2.3], [0.2, 2.43], [0.14, 2.7], [0.12, 3.6], [0.11, 4.4], [0.2, 4.62],
+                [0.25, 4.74], [0.13, 4.9], [0.1, 5.4], [0.1, 6.1], [0.14, 6.24], [0.3, 6.38], [0.44, 6.5]
+            ].map(([r, y]) => [r, BASE_Y + y * H]);
+            lathe(s, baluster, 9000);
+            for (let i = 0; i < 700; i++) { // underside of the base
+                let a = Math.random() * Math.PI * 2, p = 1.05 * Math.sqrt(Math.random());
+                P(s, Math.cos(a) * p, BASE_Y, Math.sin(a) * p, gold(rand(0.25, 0.4)), [0, -1, 0]);
+            }
+            ball(s, 0, PIVOT_Y, 0, 0.2, 260);
 
-            // treasure chest: box body + half-cylinder lid
+            // ---- treasure chest on the cup ----
             const CW = 1.7, CH = 0.8, CD = 1.1, LR = CD / 2;
-            const C_Y = PILLAR_TOP + CH / 2;
+            const C_Y = PILLAR_TOP + CH / 2 + 0.02;
             let wood = () => [0.85, 0.42, 0.14].map(v => v * rand(0.4, 0.7));
             let faces = [
                 [CW * CH, () => [rand(-1, 1) * CW / 2, rand(-1, 1) * CH / 2, CD / 2]],
@@ -514,49 +578,79 @@
                 let a = Math.random() * Math.PI, p = LR * Math.sqrt(Math.random());
                 P(s, (i % 2 ? 1 : -1) * CW / 2, C_Y + CH / 2 + Math.sin(a) * p, Math.cos(a) * p, wood());
             }
-            // gold bands and rim
+            let band = (a, c, count) => {
+                for (let i = 0; i < count; i++) {
+                    let t = Math.random();
+                    P(s, a[0] + (c[0] - a[0]) * t, a[1] + (c[1] - a[1]) * t, a[2] + (c[2] - a[2]) * t, gold(1));
+                }
+            };
             for (let bx of [-CW * 0.32, CW * 0.32]) {
-                line(s, [bx, C_Y - CH / 2, CD / 2], [bx, C_Y + CH / 2, CD / 2], 120, gold(1), 0.02);
-                line(s, [bx, C_Y - CH / 2, -CD / 2], [bx, C_Y + CH / 2, -CD / 2], 120, gold(1), 0.02);
+                band([bx, C_Y - CH / 2, CD / 2], [bx, C_Y + CH / 2, CD / 2], 120);
+                band([bx, C_Y - CH / 2, -CD / 2], [bx, C_Y + CH / 2, -CD / 2], 120);
                 for (let i = 0; i < 200; i++) {
                     let a = Math.random() * Math.PI;
                     P(s, bx, C_Y + CH / 2 + Math.sin(a) * LR, Math.cos(a) * LR, gold(1));
                 }
             }
-            line(s, [-CW / 2, C_Y + CH / 2, CD / 2], [CW / 2, C_Y + CH / 2, CD / 2], 250, gold(1), 0.02);
-            line(s, [-CW / 2, C_Y + CH / 2, -CD / 2], [CW / 2, C_Y + CH / 2, -CD / 2], 250, gold(1), 0.02);
-            ball(s, 0, C_Y + CH / 2 - 0.05, CD / 2 + 0.03, 0.12, 200, [1, 0.95, 0.7]); // lock
+            band([-CW / 2, C_Y + CH / 2, CD / 2], [CW / 2, C_Y + CH / 2, CD / 2], 250);
+            band([-CW / 2, C_Y + CH / 2, -CD / 2], [CW / 2, C_Y + CH / 2, -CD / 2], 250);
+            ball(s, 0, C_Y + CH / 2 - 0.05, CD / 2 + 0.03, 0.12, 200, () => [1, 0.95, 0.7]); // lock
             for (let i = 0; i < 350; i++) { // sparkles rising from the chest
                 s.add(rand(-0.7, 0.7), C_Y + CH / 2 + LR + rand(0, 1.2), rand(-0.4, 0.4),
                     [1, 0.9, 0.6].map(v => v * rand(0.5, 1)), rand(0.5, 1.5), rand(0.85, 1), 0.35);
             }
             heart.add(s.build(mat));
 
-            // rocking beam
+            // ---- rocking beam: gentle arch, volute ends, C-scroll ornaments ----
             beamGroup = new THREE.Group();
             beamGroup.position.y = PIVOT_Y;
             heart.add(beamGroup);
             let bm = new PointBuilder();
-            line(bm, [-BEAM_L, 0, 0], [BEAM_L, 0, 0], 1400, gold(0.95), 0.06);
-            ball(bm, -BEAM_L, 0, 0, 0.16, 150, gold(1));
-            ball(bm, BEAM_L, 0, 0, 0.16, 150, gold(1));
+            let beamY = x => 0.16 * Math.cos(x / BEAM_L * Math.PI / 2) - 0.06;
+            let beamPts = [];
+            for (let i = 0; i <= 16; i++) {
+                let x = -BEAM_L + i / 16 * BEAM_L * 2;
+                beamPts.push([x, beamY(x), 0]);
+            }
+            tube(bm, beamPts, t => 0.05 + 0.04 * (1 - Math.abs(t * 2 - 1)), 2600);
+            const END_Y = beamY(BEAM_L), VR = 0.3;
+            for (let side of [-1, 1]) {
+                // volute curling from the beam end
+                tube(bm, spiral(side * BEAM_L, END_Y - VR, VR, Math.PI / 2, 0.9, 0.65, side).map(([x, y]) => [x, y, 0]),
+                    t => 0.045 * (1 - 0.5 * t), 500);
+                // C-scrolls above and below the center
+                tube(bm, [[side * 0.12, 0.12, 0], [side * 0.5, 0.42, 0], [side * 0.95, 0.5, 0], [side * 1.25, 0.34, 0],
+                    [side * 1.18, 0.16, 0], [side * 1.02, 0.2, 0]], t => 0.04 * (1 - 0.4 * t), 600);
+                tube(bm, [[side * 0.12, -0.08, 0], [side * 0.45, -0.32, 0], [side * 0.82, -0.34, 0], [side * 0.98, -0.2, 0],
+                    [side * 0.88, -0.1, 0]], t => 0.035 * (1 - 0.4 * t), 400);
+                ball(bm, side * 1.6, beamY(1.6) + 0.02, 0, 0.07, 80);
+            }
             beamGroup.add(bm.build(mat));
 
-            // pans hang from the beam ends and stay vertical
+            // ---- pans: hook, beaded chains, shallow dish ----
+            const HANG_Y = END_Y - VR * 2 + 0.05;
             for (let side of [-1, 1]) {
                 let pan = new THREE.Group();
-                pan.position.x = side * BEAM_L;
+                pan.position.set(side * BEAM_L, HANG_Y, 0);
                 beamGroup.add(pan);
                 let pb = new PointBuilder();
+                ball(pb, 0, 0, 0, 0.08, 80);
                 for (let k = 0; k < 3; k++) {
                     let a = Math.PI / 2 + k * Math.PI * 2 / 3;
-                    line(pb, [0, 0, 0], [Math.cos(a) * PAN_R, -CHAIN_L, Math.sin(a) * PAN_R], 220, gold(0.8), 0.02);
+                    let ex = Math.cos(a) * PAN_R * 0.97, ez = Math.sin(a) * PAN_R * 0.97;
+                    const BEADS = 26;
+                    for (let i = 1; i <= BEADS; i++) {
+                        let t = i / BEADS;
+                        for (let q = 0; q < 6; q++) {
+                            P(pb, ex * t + gauss() * 0.015, -CHAIN_L * t + gauss() * 0.015, ez * t + gauss() * 0.015,
+                                shine(), [0, 0, 0], rand(0.6, 1));
+                        }
+                    }
                 }
-                ring(pb, 0, -CHAIN_L, 0, PAN_R, 400, gold(1));
-                for (let i = 0; i < 900; i++) {
-                    let a = Math.random() * Math.PI * 2, p = PAN_R * Math.sqrt(Math.random());
-                    P(pb, Math.cos(a) * p, -CHAIN_L - 0.45 * (1 - (p / PAN_R) ** 2), Math.sin(a) * p, gold(0.5));
-                }
+                let dish = [[0, -0.36], [0.25, -0.35], [0.6, -0.32], [0.95, -0.22], [1.15, -0.1], [1.25, 0], [1.3, 0.03]]
+                    .map(([r, y]) => [r, -CHAIN_L + y]);
+                lathe(pb, dish, 2200, { flip: true });
+                lathe(pb, [[0, -CHAIN_L - 0.48], [0.14, -CHAIN_L - 0.46], [0.2, -CHAIN_L - 0.4], [0.16, -CHAIN_L - 0.35]], 150);
                 pan.add(pb.build(mat));
                 pans.push(pan);
             }
@@ -564,7 +658,7 @@
 
         // ---------- decorations (black hole, texts, stickers, little hearts) ----------
         let decor = new THREE.Group();
-        pivot.add(decor);
+        world.add(decor);
 
         let canvasTexture = canvas => {
             let tex = new THREE.CanvasTexture(canvas);
@@ -726,11 +820,17 @@
         const AXIS_Y = new THREE.Vector3(0, 1, 0);
         let input = { up: false, down: false, left: false, right: false };
         let velX = 0, velY = 0;
-        controls.saveState();
+        let spinPaused = false, spinFactor = 1, spinAngle = 0;
+        let pauseBtn = document.querySelector("[data-dir=pause]");
+        let togglePause = () => {
+            spinPaused = !spinPaused;
+            pauseBtn.textContent = spinPaused ? "▶" : "⏸";
+        };
 
         let resetView = () => {
             pivot.quaternion.identity();
             velX = velY = 0;
+            spinAngle = 0;
             controls.reset();
         };
 
@@ -757,6 +857,7 @@
             }
             if (keyMap[e.code]) { input[keyMap[e.code]] = true; e.preventDefault(); }
             if (e.code === "KeyR") resetView();
+            if (e.code === "KeyP") togglePause();
         });
         window.addEventListener("keyup", e => {
             if (keyMap[e.code]) input[keyMap[e.code]] = false;
@@ -767,8 +868,8 @@
 
         document.querySelectorAll("#pad button").forEach(btn => {
             let dir = btn.dataset.dir;
-            if (dir === "reset") {
-                btn.addEventListener("click", resetView);
+            if (dir === "reset" || dir === "pause") {
+                btn.addEventListener("click", dir === "reset" ? resetView : togglePause);
                 return;
             }
             let on = e => { input[dir] = true; e.preventDefault(); };
@@ -809,7 +910,14 @@
             let beatT = elapsed % 1.4;
             let beat = Math.exp(-Math.pow((beatT - 0.15) * 14, 2)) + 0.6 * Math.exp(-Math.pow((beatT - 0.42) * 14, 2));
             heart.material.uniforms.uBeat.value = 1 + 0.06 * beat;
-            heart.rotation.y = elapsed * HEART_SPIN;
+            // Spin slows to a stop when zoomed in close (or when paused), so the front stays visible
+            let dist = camera.position.distanceTo(controls.target);
+            let wantSpin = spinPaused ? 0 : THREE.MathUtils.smoothstep(dist, 10, 18);
+            spinFactor += (wantSpin - spinFactor) * (1 - Math.exp(-dt * 3));
+            spinAngle += dt * HEART_SPIN * spinFactor;
+            heart.rotation.y = spinAngle;
+            // Fade the heart shell when close so the scale and chest inside are visible
+            heart.material.uniforms.uOpacity.value = 0.2 + 0.8 * THREE.MathUtils.smoothstep(dist, 7, 16);
             beamGroup.rotation.z = 0.1 * Math.sin(elapsed * 0.9);
             for (let pan of pans) pan.rotation.z = -beamGroup.rotation.z;
 
