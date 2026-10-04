@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta author="Luc Thien Phong">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universe</title>
+</head>
+<style>
+    body {
+        overflow: hidden;
+        margin: 0;
+        background: #050008;
+    }
+
+    #pad {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        display: grid;
+        grid-template-columns: repeat(3, 48px);
+        grid-template-rows: repeat(3, 48px);
+        gap: 6px;
+        user-select: none;
+        -webkit-user-select: none;
+        touch-action: none;
+    }
+
+    #pad button {
+        border: 1px solid rgba(255, 90, 220, 0.6);
+        border-radius: 10px;
+        background: rgba(80, 20, 90, 0.35);
+        color: #fff;
+        font-size: 20px;
+        cursor: pointer;
+        backdrop-filter: blur(4px);
+    }
+
+    #pad button:hover {
+        background: rgba(255, 90, 220, 0.4);
+    }
+
+    #pad button:active {
+        background: rgba(255, 90, 220, 0.7);
+    }
+
+    /* Controls stay hidden until the intro is started */
+    #pad {
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 1s ease 3s, visibility 0s linear 3s;
+    }
+
+    body.started #pad {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    #intro {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: radial-gradient(circle at center, rgba(20, 0, 20, 0.2), rgba(5, 0, 8, 0.8));
+        z-index: 10;
+        transition: opacity 0.8s ease, visibility 0s linear 0.8s;
+    }
+
+    body.started #intro {
+        opacity: 0;
+        visibility: hidden;
+    }
+
+    #intro .card {
+        max-width: 380px;
+        width: 100%;
+        padding: 32px 28px;
+        text-align: center;
+        color: #fff;
+        font-family: sans-serif;
+        border: 1px solid rgba(255, 90, 220, 0.45);
+        border-radius: 18px;
+        background: rgba(80, 20, 90, 0.2);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        box-shadow: 0 0 60px rgba(255, 90, 220, 0.25);
+        transition: transform 0.8s ease;
+    }
+
+    body.started #intro .card {
+        transform: translateY(-20px) scale(0.95);
+    }
+
+    #intro h1 {
+        margin: 0 0 8px;
+        font-size: 32px;
+        letter-spacing: 6px;
+        font-weight: 300;
+    }
+
+    #intro p {
+        margin: 0 0 24px;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    #startBtn {
+        padding: 12px 40px;
+        font-size: 16px;
+        letter-spacing: 2px;
+        color: #fff;
+        border: none;
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgb(255, 120, 60), rgb(255, 60, 200));
+        box-shadow: 0 0 24px rgba(255, 90, 220, 0.6);
+        cursor: pointer;
+        animation: glow 2s ease-in-out infinite;
+    }
+
+    #startBtn:hover {
+        transform: scale(1.05);
+    }
+
+    @keyframes glow {
+        50% {
+            box-shadow: 0 0 40px rgba(255, 90, 220, 0.95);
+        }
+    }
+</style>
+
+<body>
+    <div id="pad">
+        <span></span>
+        <button data-dir="up" title="Xoay lên (↑ / W)">↑</button>
+        <span></span>
+        <button data-dir="left" title="Xoay trái (← / A)">←</button>
+        <button data-dir="reset" title="Đặt lại (R)">⟳</button>
+        <button data-dir="right" title="Xoay phải (→ / D)">→</button>
+        <span></span>
+        <button data-dir="down" title="Xoay xuống (↓ / S)">↓</button>
+        <span></span>
+    </div>
+    <div id="intro">
+        <div class="card">
+            <h1>UNIVERSE</h1>
+            <p>Hàng trăm nghìn vì sao đang chờ được giải phóng.<br>Bấm để khai sinh thiên hà.</p>
+            <button id="startBtn">BẮT ĐẦU</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from "three";
+        import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+        import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+        import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+        import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+
+        // ================= CUSTOMIZE =================
+        // Ảnh tròn bay quanh (đường dẫn ảnh). Ảnh chỉ hiện khi mở qua web server
+        // (vd. VS Code Live Server); mở trực tiếp file:// sẽ dùng emoji thay thế.
+        const PHOTOS = [];
+        const STICKER_EMOJIS = ["💖", "💌", "🌹", "💕", "🥰"];
+        const EXPLODE_DURATION = 5; // giây
+        const BLOOM_STRENGTH = 0.9;
+        // =============================================
+
+        var defined = 'QXV0aG9yOiBMdWMg';
+        var datacenter = ['aHR0cHM6L', 'y93d3cuZmF', 'jZWJvb2suY29t', 'L3Byb2ZpbGUu', 'cGhwP2lkPTEw', 'MDA0NTQwNj', 'I2MTQ5MQ' + '=='];
+        defined = defined.concat('VGhpZW4gUGhvbmc=');
+        console.log(atob(defined));
+        console.log(atob(datacenter.join('')));
+
+        // Raw colors everywhere (no sRGB conversion) so shader colors look as written
+        THREE.ColorManagement.enabled = false;
+
+        let scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050008);
+        let camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 2000);
+        camera.position.set(0, 10, 28);
+        let renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.setSize(innerWidth, innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        let composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        let bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), BLOOM_STRENGTH, 0.5, 0.15);
+        composer.addPass(bloom);
+
+        let controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 3, 0);
+        controls.enableDamping = true;
+        controls.enablePan = false;
+        controls.minDistance = 6;
+        controls.maxDistance = 90;
+        controls.enabled = false; // locked until the intro is started
+        controls.update();
+
+        let gu = {
+            time: { value: 0 },
+            progress: { value: 0 }, // 0 = collapsed into the core, 1 = full scene
+            scale: { value: innerHeight * renderer.getPixelRatio() / 2 }
+        };
+
+        window.addEventListener("resize", () => {
+            camera.aspect = innerWidth / innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(innerWidth, innerHeight);
+            composer.setSize(innerWidth, innerHeight);
+            gu.scale.value = innerHeight * renderer.getPixelRatio() / 2;
+        });
+
+        // ---------- helpers ----------
+        let rand = (a, b) => a + Math.random() * (b - a);
+        let gauss = () => {
+            let u = 1 - Math.random(), v = Math.random();
+            return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        };
+        let lerpColor = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+        class PointBuilder {
+            constructor() { this.pos = []; this.col = []; this.size = []; this.shift = []; this.delay = []; this.normal = []; }
+            add(x, y, z, c, size, delay, wobble, n = [0, 0, 0]) {
+                this.pos.push(x, y, z);
+                this.normal.push(n[0], n[1], n[2]);
+                this.col.push(c[0], c[1], c[2]);
+                this.size.push(size);
+                this.delay.push(delay);
+                this.shift.push(
+                    Math.random() * Math.PI,
+                    Math.random() * Math.PI * 2,
+                    (Math.random() * 0.9 + 0.1) * Math.PI * 0.1,
+                    (Math.random() * 0.9 + 0.1) * wobble
+                );
+            }
+            build(material) {
+                let g = new THREE.BufferGeometry();
+                g.setAttribute("position", new THREE.Float32BufferAttribute(this.pos, 3));
+                g.setAttribute("aColor", new THREE.Float32BufferAttribute(this.col, 3));
+                g.setAttribute("aSize", new THREE.Float32BufferAttribute(this.size, 1));
+                g.setAttribute("aShift", new THREE.Float32BufferAttribute(this.shift, 4));
+                g.setAttribute("aDelay", new THREE.Float32BufferAttribute(this.delay, 1));
+                g.setAttribute("aNormal", new THREE.Float32BufferAttribute(this.normal, 3));
+                return new THREE.Points(g, material);
+            }
+        }
+
+        let pointVertex = `
+            uniform float uTime;
+            uniform float uProgress;
+            uniform float uSize;
+            uniform float uScale;
+            uniform vec3 uCenter;
+            uniform float uBeat;
+            attribute vec3 aColor;
+            attribute float aSize;
+            attribute vec4 aShift;
+            attribute float aDelay;
+            attribute vec3 aNormal;
+            varying vec3 vColor;
+            varying float vK;
+            void main() {
+                // Surface points (non-zero normal) get lit: diffuse + rim, back side dimmed
+                float shade = 1.;
+                if (dot(aNormal, aNormal) > 0.25) {
+                    vec3 n = normalize(normalMatrix * aNormal);
+                    float diff = max(dot(n, normalize(vec3(0.4, 0.6, 1.))), 0.);
+                    float rim = pow(1. - abs(n.z), 3.);
+                    shade = (0.2 + 0.9 * diff + 0.9 * rim) * (n.z < 0. ? 0.3 : 1.);
+                }
+
+                vec3 p = uCenter + (position - uCenter) * uBeat;
+
+                float moveT = mod(aShift.x + aShift.z * uTime, 6.2831853);
+                float moveS = mod(aShift.y + aShift.z * uTime, 6.2831853);
+                p += vec3(cos(moveS) * sin(moveT), cos(moveT), sin(moveS) * sin(moveT)) * aShift.w;
+
+                // Explosion: each point flies out of the black hole along a spiral
+                float k = clamp((uProgress - aDelay * 0.4) / 0.6, 0., 1.);
+                k = 1. - pow(1. - k, 3.);
+                float ang = (1. - k) * 4.;
+                float ca = cos(ang), sa = sin(ang);
+                p.xz = mat2(ca, -sa, sa, ca) * p.xz;
+                p *= mix(0.015, 1., k);
+
+                vec4 mv = modelViewMatrix * vec4(p, 1.);
+                gl_PointSize = uSize * aSize * uScale / -mv.z;
+                gl_Position = projectionMatrix * mv;
+                vColor = aColor * shade;
+                vK = k;
+            }
+        `;
+        let pointFragment = `
+            uniform float uOpacity;
+            varying vec3 vColor;
+            varying float vK;
+            void main() {
+                float d = length(gl_PointCoord - 0.5);
+                if (d > 0.5) discard;
+                float a = smoothstep(0.5, 0.0, d);
+                gl_FragColor = vec4(vColor, a * a * uOpacity * mix(0.04, 1., vK));
+            }
+        `;
+        let makePointMaterial = (size, opts = {}) => new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: gu.time,
+                uProgress: opts.progress || gu.progress,
+                uScale: gu.scale,
+                uSize: { value: size },
+                uCenter: { value: opts.center || new THREE.Vector3() },
+                uBeat: { value: 1 },
+                uOpacity: { value: opts.opacity ?? 1 }
+            },
+            vertexShader: pointVertex,
+            fragmentShader: pointFragment,
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        // Everything the arrow keys / buttons rotate lives in this pivot
+        let pivot = new THREE.Group();
+        scene.add(pivot);
+
+        // ---------- background stars (always visible) ----------
+        {
+            let b = new PointBuilder();
+            for (let i = 0; i < 6000; i++) {
+                let v = new THREE.Vector3().randomDirection().multiplyScalar(rand(250, 500));
+                let c = Math.random() < 0.8 ? [0.8, 0.8, 1] : [1, 0.7, 0.9];
+                b.add(v.x, v.y, v.z, c.map(x => x * rand(0.3, 0.8)), rand(1, 3), 0, 0);
+            }
+            scene.add(b.build(makePointMaterial(1.6, { progress: { value: 1 } })));
+        }
+
+        // ---------- spiral galaxy ----------
+        const GALAXY_R = 24;
+        let galaxy;
+        {
+            let b = new PointBuilder();
+            const ARMS = 3;
+            const inner = [1.0, 0.72, 0.42], mid = [1.0, 0.32, 0.62], outer = [0.55, 0.3, 1.0];
+
+            // spiral arms
+            for (let i = 0; i < 70000; i++) {
+                let arm = i % ARMS;
+                let rr = Math.pow(Math.random(), 1.5);
+                let r = 1.8 + rr * GALAXY_R;
+                let a = arm / ARMS * Math.PI * 2 + r * 0.33;
+                let sc = 0.3 + r * 0.07;
+                let x = Math.cos(a) * r + gauss() * sc;
+                let z = Math.sin(a) * r + gauss() * sc;
+                let y = gauss() * (0.1 + 0.5 * Math.exp(-r / 5));
+                let t = r / (GALAXY_R + 1.8);
+                let c = t < 0.35 ? lerpColor(inner, mid, t / 0.35) : lerpColor(mid, outer, (t - 0.35) / 0.65);
+                if (Math.random() < 0.05) c = [1, 0.95, 1];
+                b.add(x, y, z, c.map(v => v * rand(0.5, 0.9)), rand(0.6, 1.8), Math.random(), 0.35);
+            }
+            // diffuse dust disk between the arms
+            for (let i = 0; i < 45000; i++) {
+                let r = 2 + Math.sqrt(Math.random()) * 38;
+                let a = Math.random() * Math.PI * 2;
+                let c = [[0.8, 0.6, 1], [1, 0.65, 0.9], [0.9, 0.9, 1]][i % 3];
+                b.add(Math.cos(a) * r, gauss() * 0.25, Math.sin(a) * r, c.map(v => v * rand(0.15, 0.45)), rand(0.5, 1.5), Math.random(), 0.4);
+            }
+            // bright orange bulge around the black hole
+            for (let i = 0; i < 8000; i++) {
+                let r = 1.6 + Math.abs(gauss()) * 2.2;
+                let a = Math.random() * Math.PI * 2;
+                b.add(Math.cos(a) * r, gauss() * 0.2, Math.sin(a) * r, [1, 0.6, 0.3].map(v => v * rand(0.4, 0.8)), rand(0.6, 1.6), Math.random() * 0.5, 0.2);
+            }
+            galaxy = b.build(makePointMaterial(0.12));
+            pivot.add(galaxy);
+        }
+
+        // ---------- particle heart ----------
+        // True 3D heart surface: (x² + 9/4·y² + z² − 1)³ − x²z³ − 9/80·y²z³ = 0
+        // (x = width, y = depth, z = up). Tip at z = −1.
+        const HEART_S = 5.6, HEART_Y = 2 + HEART_S; // tip sits just above the black hole
+        const HEART_SPIN = 0.4; // radians per second
+        let heart;
+        {
+            let f = (x, y, z) => {
+                let a = x * x + 2.25 * y * y + z * z - 1;
+                return a * a * a - x * x * z * z * z - 0.1125 * y * y * z * z * z;
+            };
+            let grad = (x, y, z) => {
+                let a = x * x + 2.25 * y * y + z * z - 1, a2 = 3 * a * a, z2 = z * z, z3 = z2 * z;
+                return [
+                    a2 * 2 * x - 2 * x * z3,
+                    a2 * 4.5 * y - 0.225 * y * z3,
+                    a2 * 2 * z - 3 * x * x * z2 - 0.3375 * y * y * z2
+                ];
+            };
+            // March from the center along a random direction to the surface, then bisect
+            let surfaceAlong = d => {
+                let lo = 0, hi = 0;
+                for (let r = 0.02; r < 2; r += 0.02) {
+                    if (f(d.x * r, d.y * r, d.z * r) > 0) { hi = r; break; }
+                    lo = r;
+                }
+                for (let i = 0; i < 20; i++) {
+                    let m = (lo + hi) / 2;
+                    if (f(d.x * m, d.y * m, d.z * m) > 0) hi = m; else lo = m;
+                }
+                return lo;
+            };
+
+            let b = new PointBuilder();
+            let d = new THREE.Vector3();
+            for (let i = 0; i < 26000; i++) {
+                d.randomDirection();
+                let R = surfaceAlong(d);
+                let shell = i < 19000;
+                let r = shell ? R * (1 - Math.abs(gauss()) * 0.015) : R * Math.cbrt(Math.random()) * 0.92;
+                let x = d.x * r, y = d.y * r, z = d.z * r;
+                let n = [0, 0, 0], c;
+                if (shell) {
+                    let g = grad(x, y, z);
+                    let len = Math.hypot(g[0], g[1], g[2]) || 1;
+                    n = [g[0] / len, g[2] / len, g[1] / len]; // to world axes (x, up, depth)
+                    c = Math.random() < 0.05 ? [1, 0.9, 1] : [1, 0.22, 0.88];
+                } else {
+                    c = [0.7, 0.12, 0.75].map(v => v * 0.35);
+                }
+                b.add(x * HEART_S, HEART_Y + z * HEART_S, y * HEART_S, c,
+                    shell ? rand(0.9, 1.8) : rand(0.6, 1.3), rand(0.55, 1), 0.08, n);
+            }
+            heart = b.build(makePointMaterial(0.13, { center: new THREE.Vector3(0, HEART_Y, 0) }));
+            pivot.add(heart);
+        }
+
+        // ---------- decorations (black hole, texts, stickers, little hearts) ----------
+        let decor = new THREE.Group();
+        pivot.add(decor);
+
+        let canvasTexture = canvas => {
+            let tex = new THREE.CanvasTexture(canvas);
+            tex.anisotropy = 4;
+            return tex;
+        };
+
+        // black hole
+        {
+            let hole = new THREE.Mesh(
+                new THREE.SphereGeometry(1.1, 48, 48),
+                new THREE.MeshBasicMaterial({ color: 0x000000 })
+            );
+            decor.add(hole);
+
+            let disk = new THREE.Mesh(
+                new THREE.RingGeometry(1.25, 4.2, 128, 1),
+                new THREE.ShaderMaterial({
+                    uniforms: { uTime: gu.time },
+                    vertexShader: `
+                        varying vec3 vPos;
+                        void main() {
+                            vPos = position;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform float uTime;
+                        varying vec3 vPos;
+                        void main() {
+                            float r = length(vPos.xy);
+                            float t = (r - 1.25) / (4.2 - 1.25);
+                            float ang = atan(vPos.y, vPos.x);
+                            float swirl = 0.65 + 0.35 * sin(ang * 5. + r * 4. - uTime * 2.);
+                            vec3 col = mix(vec3(1., 0.97, 0.8), vec3(1., 0.6, 0.15), smoothstep(0., 0.45, t));
+                            col = mix(col, vec3(0.9, 0.2, 0.45), smoothstep(0.45, 1., t));
+                            float a = smoothstep(0., 0.05, t) * (1. - smoothstep(0.2, 1., t)) * swirl;
+                            gl_FragColor = vec4(col, a);
+                        }
+                    `,
+                    transparent: true,
+                    depthWrite: false,
+                    side: THREE.DoubleSide,
+                    blending: THREE.AdditiveBlending
+                })
+            );
+            disk.rotation.x = -Math.PI / 2;
+            decor.add(disk);
+
+            let c = document.createElement("canvas");
+            c.width = c.height = 256;
+            let ctx = c.getContext("2d");
+            let grd = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+            grd.addColorStop(0, "rgba(255,220,150,1)");
+            grd.addColorStop(0.25, "rgba(255,150,70,0.6)");
+            grd.addColorStop(0.6, "rgba(255,60,150,0.15)");
+            grd.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = grd;
+            ctx.fillRect(0, 0, 256, 256);
+            let glow = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: canvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
+            }));
+            glow.scale.setScalar(10);
+            decor.add(glow);
+        }
+
+        // things that orbit around the center
+        let orbiters = [];
+        let addOrbiter = (sprite, r, y, angle, speed, bob) => {
+            decor.add(sprite);
+            orbiters.push({ sprite, r, y, angle, speed, bob, phase: Math.random() * Math.PI * 2 });
+        };
+
+        let stickerCanvas = draw => {
+            let c = document.createElement("canvas");
+            c.width = c.height = 256;
+            let ctx = c.getContext("2d");
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(128, 128, 116, 0, Math.PI * 2);
+            ctx.fillStyle = "#fff";
+            ctx.fill();
+            ctx.clip();
+            draw(ctx);
+            ctx.restore();
+            ctx.beginPath();
+            ctx.arc(128, 128, 116, 0, Math.PI * 2);
+            ctx.lineWidth = 8;
+            ctx.strokeStyle = "#ff8ae6";
+            ctx.stroke();
+            return c;
+        };
+        let makeSticker = index => {
+            let emoji = STICKER_EMOJIS[index % STICKER_EMOJIS.length];
+            let c = stickerCanvas(ctx => {
+                ctx.font = '130px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(emoji, 128, 140);
+            });
+            let tex = canvasTexture(c);
+            let s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+            s.scale.setScalar(2.6);
+
+            // Photos only work over http(s): file:// images taint the canvas for WebGL
+            let photo = PHOTOS.length ? PHOTOS[index % PHOTOS.length] : null;
+            if (photo && location.protocol !== "file:") {
+                let img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = () => {
+                    let pc = stickerCanvas(ctx => {
+                        let m = Math.min(img.width, img.height);
+                        ctx.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 12, 12, 232, 232);
+                    });
+                    s.material.map = canvasTexture(pc);
+                    s.material.needsUpdate = true;
+                };
+                img.src = photo;
+            } else if (photo) {
+                console.warn("Ảnh chỉ hiển thị khi mở trang qua web server (vd. Live Server).");
+            }
+            return s;
+        };
+
+        let makeHeartSprite = () => {
+            let c = document.createElement("canvas");
+            c.width = c.height = 128;
+            let ctx = c.getContext("2d");
+            let x = 64, y = 30, s = 72;
+            ctx.shadowColor = "#ff3ddc";
+            ctx.shadowBlur = 18;
+            let grd = ctx.createLinearGradient(0, y, 0, y + s);
+            grd.addColorStop(0, "#ff9bea");
+            grd.addColorStop(1, "#ff2fa8");
+            ctx.fillStyle = grd;
+            ctx.beginPath();
+            ctx.moveTo(x, y + s / 4);
+            ctx.bezierCurveTo(x, y, x - s / 2, y, x - s / 2, y + s / 4);
+            ctx.bezierCurveTo(x - s / 2, y + s / 2, x, y + s * 0.75, x, y + s);
+            ctx.bezierCurveTo(x, y + s * 0.75, x + s / 2, y + s / 2, x + s / 2, y + s / 4);
+            ctx.bezierCurveTo(x + s / 2, y, x, y, x, y + s / 4);
+            ctx.fill();
+            let sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTexture(c), transparent: true, depthWrite: false }));
+            sp.scale.setScalar(rand(0.8, 1.5));
+            return sp;
+        };
+
+        for (let i = 0; i < 6; i++) {
+            addOrbiter(makeSticker(i), rand(9, 20), rand(1.5, 3.5), i / 6 * Math.PI * 2 + 0.5, 0.5, 0.4);
+        }
+        for (let i = 0; i < 14; i++) {
+            addOrbiter(makeHeartSprite(), rand(5, 20), rand(1, 6), Math.random() * Math.PI * 2, 0.7, 0.8);
+        }
+        decor.scale.setScalar(0.001);
+
+        // ---------- rotation by keys / buttons ----------
+        const ROT_SPEED = 1.2; // radians per second
+        const AXIS_X = new THREE.Vector3(1, 0, 0);
+        const AXIS_Y = new THREE.Vector3(0, 1, 0);
+        let input = { up: false, down: false, left: false, right: false };
+        let velX = 0, velY = 0;
+        controls.saveState();
+
+        let resetView = () => {
+            pivot.quaternion.identity();
+            velX = velY = 0;
+            controls.reset();
+        };
+
+        // Intro: "Bắt đầu" releases everything from the black hole
+        let started = false;
+        let start = () => {
+            if (started) return;
+            started = true;
+            document.body.classList.add("started");
+            controls.enabled = true;
+        };
+        document.getElementById("startBtn").addEventListener("click", start);
+
+        const keyMap = {
+            ArrowUp: "up", KeyW: "up",
+            ArrowDown: "down", KeyS: "down",
+            ArrowLeft: "left", KeyA: "left",
+            ArrowRight: "right", KeyD: "right"
+        };
+        window.addEventListener("keydown", e => {
+            if (!started) {
+                if (e.code === "Enter" || e.code === "Space") start();
+                return;
+            }
+            if (keyMap[e.code]) { input[keyMap[e.code]] = true; e.preventDefault(); }
+            if (e.code === "KeyR") resetView();
+        });
+        window.addEventListener("keyup", e => {
+            if (keyMap[e.code]) input[keyMap[e.code]] = false;
+        });
+        window.addEventListener("blur", () => {
+            for (let k in input) input[k] = false;
+        });
+
+        document.querySelectorAll("#pad button").forEach(btn => {
+            let dir = btn.dataset.dir;
+            if (dir === "reset") {
+                btn.addEventListener("click", resetView);
+                return;
+            }
+            let on = e => { input[dir] = true; e.preventDefault(); };
+            let off = () => { input[dir] = false; };
+            btn.addEventListener("pointerdown", on);
+            btn.addEventListener("pointerup", off);
+            btn.addEventListener("pointerleave", off);
+            btn.addEventListener("pointercancel", off);
+        });
+
+        // ---------- animation ----------
+        let clock = new THREE.Clock();
+        let lastT = 0;
+        renderer.setAnimationLoop(() => {
+            controls.update();
+            let elapsed = clock.getElapsedTime();
+            let dt = Math.min(elapsed - lastT, 0.1);
+            lastT = elapsed;
+
+            if (started && gu.progress.value < 1) {
+                gu.progress.value = Math.min(gu.progress.value + dt / EXPLODE_DURATION, 1);
+            }
+
+            // Smoothly accelerate / decelerate rotation from keys & buttons
+            let targetX = (input.down - input.up) * ROT_SPEED;
+            let targetY = (input.right - input.left) * ROT_SPEED;
+            let ease = 1 - Math.exp(-dt * 8);
+            velX += (targetX - velX) * ease;
+            velY += (targetY - velY) * ease;
+            if (Math.abs(velX) > 1e-4) pivot.rotateOnWorldAxis(AXIS_X, velX * dt);
+            if (Math.abs(velY) > 1e-4) pivot.rotateOnWorldAxis(AXIS_Y, velY * dt);
+
+            let t = elapsed * 0.5;
+            gu.time.value = t * Math.PI;
+            galaxy.rotation.y = -t * 0.08;
+
+            // heartbeat: two quick pulses, then rest
+            let beatT = elapsed % 1.4;
+            let beat = Math.exp(-Math.pow((beatT - 0.15) * 14, 2)) + 0.6 * Math.exp(-Math.pow((beatT - 0.42) * 14, 2));
+            heart.material.uniforms.uBeat.value = 1 + 0.06 * beat;
+            heart.rotation.y = elapsed * HEART_SPIN;
+
+            // decorations appear in the second half of the explosion
+            let d = THREE.MathUtils.smoothstep(gu.progress.value, 0.45, 1);
+            decor.scale.setScalar(Math.max(d, 0.001));
+            for (let o of orbiters) {
+                o.angle += dt * o.speed * (4 / o.r);
+                o.sprite.position.set(
+                    Math.cos(o.angle) * o.r,
+                    o.y + Math.sin(elapsed * 1.2 + o.phase) * o.bob,
+                    Math.sin(o.angle) * o.r
+                );
+                o.sprite.material.opacity = d;
+            }
+
+            composer.render();
+        });
+    </script>
+</body>
+
+</html>
