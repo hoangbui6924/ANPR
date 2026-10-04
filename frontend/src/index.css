@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+/* Design tokens (light + dark). Components use these through the Tailwind colors below. */
+@theme {
+  --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-plate: "Arial Narrow", "Roboto Condensed", Arial, sans-serif;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primary-fg);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-fg: var(--sidebar-fg);
+  --color-box-1line: var(--box-1line);
+  --color-box-2line: var(--box-2line);
+}
+
+:root {
+  --bg: #f4f6fa;
+  --surface: #ffffff;
+  --muted: #eef1f6;
+  --border: #dfe4ec;
+  --fg: #0f172a;
+  --fg-muted: #5b6577;
+  --primary: #1d4ed8;
+  --primary-fg: #ffffff;
+  --danger: #dc2626;
+  --success: #15803d;
+  --warning: #b45309;
+  --sidebar: #0f172a;
+  --sidebar-fg: #cbd5e1;
+  --box-1line: #16a34a;
+  --box-2line: #db2777;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1020;
+    --surface: #121a2e;
+    --muted: #1a2440;
+    --border: #253150;
+    --fg: #e5e9f2;
+    --fg-muted: #93a0b8;
+    --primary: #3b82f6;
+    --danger: #f87171;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --sidebar: #070b16;
+    --box-1line: #4ade80;
+    --box-2line: #f472b6;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0b1020;
+  --surface: #121a2e;
+  --muted: #1a2440;
+  --border: #253150;
+  --fg: #e5e9f2;
+  --fg-muted: #93a0b8;
+  --primary: #3b82f6;
+  --danger: #f87171;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --sidebar: #070b16;
+  --box-1line: #4ade80;
+  --box-2line: #f472b6;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
