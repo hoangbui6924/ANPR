@@ -1,0 +1,12 @@
+{
+  "name": "anpr-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "portrait": "node make-portrait.mjs"
+  },
+  "dependencies": {
+    "@imgly/background-removal-node": "^1.4.5",
+    "sharp": "~0.32.6"
+  }
+}
