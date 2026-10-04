@@ -869,10 +869,10 @@
             for (let obj of sources) {
                 let a = obj.geometry.attributes, srcSize = obj.material.uniforms.uSize.value;
                 for (let i = 0; i < a.position.count; i++, j++) {
-                    let o = perm[j % P.count] * 7, x = raw[o], y = raw[o + 1] | (raw[o + 2] << 8), z = raw[o + 3] / 255;
+                    let o = perm[j % P.count] * 7, x = raw[o], y = raw[o + 1] | (raw[o + 2] << 8);
                     pos[j * 3] = (x - P.width / 2 + rand(-0.5, 0.5)) * k;
                     pos[j * 3 + 1] = (P.height / 2 - y + rand(-0.5, 0.5)) * k;
-                    pos[j * 3 + 2] = z * 2.2;
+                    pos[j * 3 + 2] = 0; // flat, like a photo
                     // soft colors: brightness from the photo mapped onto the galaxy palette, a hint of the real hue
                     let r = raw[o + 4] / 255, g = raw[o + 5] / 255, b = raw[o + 6] / 255;
                     let lum = 0.3 * r + 0.59 * g + 0.11 * b;
