@@ -445,6 +445,123 @@
             pivot.add(heart);
         }
 
+        // ---------- golden Libra scale with a treasure chest, inside the heart ----------
+        const BASE_Y = 4.2, PIVOT_Y = 10, PILLAR_TOP = 10.5, BEAM_L = 3.3, CHAIN_L = 2.6, PAN_R = 1.1;
+        let beamGroup, pans = [];
+        {
+            let mat = makePointMaterial(0.11);
+            let gold = s => [1, 0.78, 0.3].map(v => v * s);
+            let P = (b, x, y, z, c, size = rand(0.7, 1.4)) => b.add(x, y, z, c, size, rand(0.75, 1), 0.03);
+            let line = (b, a, c, count, col, thick = 0.04) => {
+                for (let i = 0; i < count; i++) {
+                    let t = Math.random();
+                    P(b, a[0] + (c[0] - a[0]) * t + gauss() * thick, a[1] + (c[1] - a[1]) * t + gauss() * thick,
+                        a[2] + (c[2] - a[2]) * t + gauss() * thick, col);
+                }
+            };
+            let ring = (b, cx, cy, cz, r, count, col) => {
+                for (let i = 0; i < count; i++) {
+                    let a = Math.random() * Math.PI * 2;
+                    P(b, cx + Math.cos(a) * r, cy + gauss() * 0.03, cz + Math.sin(a) * r, col);
+                }
+            };
+            let disc = (b, cx, cy, cz, r, count, col) => {
+                for (let i = 0; i < count; i++) {
+                    let a = Math.random() * Math.PI * 2, p = r * Math.sqrt(Math.random());
+                    P(b, cx + Math.cos(a) * p, cy, cz + Math.sin(a) * p, col);
+                }
+            };
+            let ball = (b, cx, cy, cz, r, count, col) => {
+                let v = new THREE.Vector3();
+                for (let i = 0; i < count; i++) {
+                    v.randomDirection().multiplyScalar(r);
+                    P(b, cx + v.x, cy + v.y, cz + v.z, col);
+                }
+            };
+
+            // static part: base, pillar, chest
+            let s = new PointBuilder();
+            disc(s, 0, BASE_Y, 0, 1.2, 900, gold(0.45));
+            ring(s, 0, BASE_Y, 0, 1.2, 500, gold(1));
+            disc(s, 0, BASE_Y + 0.3, 0, 0.7, 400, gold(0.5));
+            ring(s, 0, BASE_Y + 0.3, 0, 0.7, 300, gold(1));
+            line(s, [0, BASE_Y, 0], [0, PILLAR_TOP, 0], 1600, gold(0.9), 0.07);
+            ring(s, 0, PIVOT_Y, 0, 0.22, 150, gold(1));
+
+            // treasure chest: box body + half-cylinder lid
+            const CW = 1.7, CH = 0.8, CD = 1.1, LR = CD / 2;
+            const C_Y = PILLAR_TOP + CH / 2;
+            let wood = () => [0.85, 0.42, 0.14].map(v => v * rand(0.4, 0.7));
+            let faces = [
+                [CW * CH, () => [rand(-1, 1) * CW / 2, rand(-1, 1) * CH / 2, CD / 2]],
+                [CW * CH, () => [rand(-1, 1) * CW / 2, rand(-1, 1) * CH / 2, -CD / 2]],
+                [CD * CH, () => [CW / 2, rand(-1, 1) * CH / 2, rand(-1, 1) * CD / 2]],
+                [CD * CH, () => [-CW / 2, rand(-1, 1) * CH / 2, rand(-1, 1) * CD / 2]],
+                [CW * CD, () => [rand(-1, 1) * CW / 2, -CH / 2, rand(-1, 1) * CD / 2]]
+            ];
+            let totalArea = faces.reduce((a, f) => a + f[0], 0);
+            for (let i = 0; i < 1800; i++) {
+                let r = Math.random() * totalArea, f = faces[0];
+                for (f of faces) { if ((r -= f[0]) <= 0) break; }
+                let [x, y, z] = f[1]();
+                P(s, x, C_Y + y, z, wood());
+            }
+            for (let i = 0; i < 1200; i++) {
+                let a = Math.random() * Math.PI;
+                P(s, rand(-1, 1) * CW / 2, C_Y + CH / 2 + Math.sin(a) * LR, Math.cos(a) * LR, wood());
+            }
+            for (let i = 0; i < 400; i++) { // lid end caps
+                let a = Math.random() * Math.PI, p = LR * Math.sqrt(Math.random());
+                P(s, (i % 2 ? 1 : -1) * CW / 2, C_Y + CH / 2 + Math.sin(a) * p, Math.cos(a) * p, wood());
+            }
+            // gold bands and rim
+            for (let bx of [-CW * 0.32, CW * 0.32]) {
+                line(s, [bx, C_Y - CH / 2, CD / 2], [bx, C_Y + CH / 2, CD / 2], 120, gold(1), 0.02);
+                line(s, [bx, C_Y - CH / 2, -CD / 2], [bx, C_Y + CH / 2, -CD / 2], 120, gold(1), 0.02);
+                for (let i = 0; i < 200; i++) {
+                    let a = Math.random() * Math.PI;
+                    P(s, bx, C_Y + CH / 2 + Math.sin(a) * LR, Math.cos(a) * LR, gold(1));
+                }
+            }
+            line(s, [-CW / 2, C_Y + CH / 2, CD / 2], [CW / 2, C_Y + CH / 2, CD / 2], 250, gold(1), 0.02);
+            line(s, [-CW / 2, C_Y + CH / 2, -CD / 2], [CW / 2, C_Y + CH / 2, -CD / 2], 250, gold(1), 0.02);
+            ball(s, 0, C_Y + CH / 2 - 0.05, CD / 2 + 0.03, 0.12, 200, [1, 0.95, 0.7]); // lock
+            for (let i = 0; i < 350; i++) { // sparkles rising from the chest
+                s.add(rand(-0.7, 0.7), C_Y + CH / 2 + LR + rand(0, 1.2), rand(-0.4, 0.4),
+                    [1, 0.9, 0.6].map(v => v * rand(0.5, 1)), rand(0.5, 1.5), rand(0.85, 1), 0.35);
+            }
+            heart.add(s.build(mat));
+
+            // rocking beam
+            beamGroup = new THREE.Group();
+            beamGroup.position.y = PIVOT_Y;
+            heart.add(beamGroup);
+            let bm = new PointBuilder();
+            line(bm, [-BEAM_L, 0, 0], [BEAM_L, 0, 0], 1400, gold(0.95), 0.06);
+            ball(bm, -BEAM_L, 0, 0, 0.16, 150, gold(1));
+            ball(bm, BEAM_L, 0, 0, 0.16, 150, gold(1));
+            beamGroup.add(bm.build(mat));
+
+            // pans hang from the beam ends and stay vertical
+            for (let side of [-1, 1]) {
+                let pan = new THREE.Group();
+                pan.position.x = side * BEAM_L;
+                beamGroup.add(pan);
+                let pb = new PointBuilder();
+                for (let k = 0; k < 3; k++) {
+                    let a = Math.PI / 2 + k * Math.PI * 2 / 3;
+                    line(pb, [0, 0, 0], [Math.cos(a) * PAN_R, -CHAIN_L, Math.sin(a) * PAN_R], 220, gold(0.8), 0.02);
+                }
+                ring(pb, 0, -CHAIN_L, 0, PAN_R, 400, gold(1));
+                for (let i = 0; i < 900; i++) {
+                    let a = Math.random() * Math.PI * 2, p = PAN_R * Math.sqrt(Math.random());
+                    P(pb, Math.cos(a) * p, -CHAIN_L - 0.45 * (1 - (p / PAN_R) ** 2), Math.sin(a) * p, gold(0.5));
+                }
+                pan.add(pb.build(mat));
+                pans.push(pan);
+            }
+        }
+
         // ---------- decorations (black hole, texts, stickers, little hearts) ----------
         let decor = new THREE.Group();
         pivot.add(decor);
@@ -693,6 +810,8 @@
             let beat = Math.exp(-Math.pow((beatT - 0.15) * 14, 2)) + 0.6 * Math.exp(-Math.pow((beatT - 0.42) * 14, 2));
             heart.material.uniforms.uBeat.value = 1 + 0.06 * beat;
             heart.rotation.y = elapsed * HEART_SPIN;
+            beamGroup.rotation.z = 0.1 * Math.sin(elapsed * 0.9);
+            for (let pan of pans) pan.rotation.z = -beamGroup.rotation.z;
 
             // decorations appear in the second half of the explosion
             let d = THREE.MathUtils.smoothstep(gu.progress.value, 0.45, 1);
