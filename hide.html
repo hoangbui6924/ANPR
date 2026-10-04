@@ -206,7 +206,7 @@
         const FOCUS = new THREE.Vector3(0, 8, 0);
         let controls = new TrackballControls(camera, renderer.domElement);
         controls.target.copy(FOCUS);
-        controls.rotateSpeed = 2.5;
+        controls.noRotate = true; // dragging rotates the model itself (see below), controls only zoom
         controls.zoomSpeed = 1.2;
         controls.noPan = true;
         controls.dynamicDampingFactor = 0.12;
@@ -816,8 +816,15 @@
 
         // ---------- rotation by keys / buttons ----------
         const ROT_SPEED = 1.2; // radians per second
-        const AXIS_X = new THREE.Vector3(1, 0, 0);
-        const AXIS_Y = new THREE.Vector3(0, 1, 0);
+        const DRAG_SPEED = 0.006; // radians per pixel
+        // Rotation axes follow the screen: drag/keys up-down tilt the model, left-right turn it
+        let camRight = new THREE.Vector3(), camUp = new THREE.Vector3();
+        let rotateModel = (pitch, yaw) => {
+            camRight.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+            camUp.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+            pivot.rotateOnWorldAxis(camRight, pitch);
+            pivot.rotateOnWorldAxis(camUp, yaw);
+        };
         let input = { up: false, down: false, left: false, right: false };
         let velX = 0, velY = 0;
         let spinPaused = false, spinFactor = 1, spinAngle = 0;
@@ -866,6 +873,40 @@
             for (let k in input) input[k] = false;
         });
 
+        // Grab-and-rotate the whole model with mouse / one finger (with inertia on release)
+        let canvas = renderer.domElement;
+        let pointers = new Map(), dragging = false, lastMove = 0;
+        canvas.style.touchAction = "none";
+        canvas.addEventListener("pointerdown", e => {
+            if (!started) return;
+            pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            dragging = pointers.size === 1;
+            velX = velY = 0;
+            lastMove = performance.now();
+            canvas.setPointerCapture(e.pointerId);
+        });
+        canvas.addEventListener("pointermove", e => {
+            let p = pointers.get(e.pointerId);
+            if (!p) return;
+            let dx = e.clientX - p.x, dy = e.clientY - p.y;
+            p.x = e.clientX; p.y = e.clientY;
+            if (!dragging || pointers.size !== 1) return;
+            let now = performance.now(), mdt = Math.max((now - lastMove) / 1000, 1 / 240);
+            lastMove = now;
+            rotateModel(dy * DRAG_SPEED, dx * DRAG_SPEED);
+            velX = THREE.MathUtils.clamp(dy * DRAG_SPEED / mdt, -8, 8);
+            velY = THREE.MathUtils.clamp(dx * DRAG_SPEED / mdt, -8, 8);
+        });
+        let endPointer = e => {
+            pointers.delete(e.pointerId);
+            if (pointers.size === 0) {
+                dragging = false;
+                if (performance.now() - lastMove > 80) velX = velY = 0; // held still before release
+            } else dragging = false; // pinch: zoom only
+        };
+        canvas.addEventListener("pointerup", endPointer);
+        canvas.addEventListener("pointercancel", endPointer);
+
         document.querySelectorAll("#pad button").forEach(btn => {
             let dir = btn.dataset.dir;
             if (dir === "reset" || dir === "pause") {
@@ -893,14 +934,20 @@
                 gu.progress.value = Math.min(gu.progress.value + dt / EXPLODE_DURATION, 1);
             }
 
-            // Smoothly accelerate / decelerate rotation from keys & buttons
-            let targetX = (input.down - input.up) * ROT_SPEED;
-            let targetY = (input.right - input.left) * ROT_SPEED;
-            let ease = 1 - Math.exp(-dt * 8);
-            velX += (targetX - velX) * ease;
-            velY += (targetY - velY) * ease;
-            if (Math.abs(velX) > 1e-4) pivot.rotateOnWorldAxis(AXIS_X, velX * dt);
-            if (Math.abs(velY) > 1e-4) pivot.rotateOnWorldAxis(AXIS_Y, velY * dt);
+            // Keys / buttons accelerate smoothly; after a drag the model coasts and slows down
+            if (!dragging) {
+                let keyX = input.down - input.up, keyY = input.right - input.left;
+                if (keyX || keyY) {
+                    let ease = 1 - Math.exp(-dt * 8);
+                    velX += (keyX * ROT_SPEED - velX) * ease;
+                    velY += (keyY * ROT_SPEED - velY) * ease;
+                } else {
+                    let decay = Math.exp(-dt * 2.5);
+                    velX *= decay;
+                    velY *= decay;
+                }
+                if (Math.abs(velX) + Math.abs(velY) > 1e-4) rotateModel(velX * dt, velY * dt);
+            }
 
             let t = elapsed * 0.5;
             gu.time.value = t * Math.PI;
