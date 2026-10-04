@@ -1,21 +1,39 @@
+import { useRef } from "react";
 import { useDropzone } from "react-dropzone";
-import { ImageUp } from "lucide-react";
+import { FolderOpen, ImageUp } from "lucide-react";
+import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 const MAX_MB = 5; // docs 8.3: JPG/PNG only, max 5 MB
+const MAX_BYTES = MAX_MB * 1024 * 1024;
+const IMAGE_RE = /\.(jpe?g|png)$/i;
 
-export function UploadZone({ onFile, disabled }: { onFile: (f: File) => void; disabled?: boolean }) {
-  const { getRootProps, getInputProps, isDragActive, fileRejections } = useDropzone({
-    accept: { "image/jpeg": [".jpg", ".jpeg"], "image/png": [".png"] },
-    maxSize: MAX_MB * 1024 * 1024,
-    multiple: false,
+/** Keep JPG/PNG ≤ 5 MB, sorted by folder path then file name (natural order: 2.jpg before 10.jpg) */
+export function pickImages(files: File[]): { images: File[]; skipped: number } {
+  const path = (f: File) => (f as File & { path?: string }).path ?? f.webkitRelativePath ?? f.name;
+  const images = files
+    .filter((f) => IMAGE_RE.test(f.name) && f.size <= MAX_BYTES)
+    .sort((a, b) => path(a).localeCompare(path(b), undefined, { numeric: true }));
+  return { images, skipped: files.length - images.length };
+}
+
+export function UploadZone({ onFiles, disabled }: { onFiles: (files: File[], skipped: number) => void; disabled?: boolean }) {
+  const folderInput = useRef<HTMLInputElement>(null);
+
+  // react-dropzone also walks dropped folders, so dragging a whole folder works
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    multiple: true,
     disabled,
-    onDropAccepted: ([f]) => onFile(f),
+    noClick: false,
+    onDrop: (accepted, rejected) => {
+      const all = [...accepted, ...rejected.map((r) => r.file)];
+      const { images, skipped } = pickImages(all);
+      onFiles(images, skipped);
+    },
   });
-  const rejection = fileRejections[0]?.errors[0];
 
   return (
-    <div>
+    <div className="space-y-3">
       <div
         {...getRootProps()}
         className={cn(
@@ -24,24 +42,33 @@ export function UploadZone({ onFile, disabled }: { onFile: (f: File) => void; di
           disabled && "pointer-events-none opacity-60",
         )}
       >
-        <input {...getInputProps()} />
+        <input {...getInputProps()} accept="image/jpeg,image/png" />
         <div className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
           <ImageUp className="size-6" />
         </div>
         <div>
-          <p className="font-medium text-fg">{isDragActive ? "Thả ảnh vào đây" : "Kéo thả ảnh hoặc bấm để chọn"}</p>
-          <p className="mt-1 text-sm text-fg-muted">JPG hoặc PNG, tối đa {MAX_MB} MB</p>
+          <p className="font-medium text-fg">{isDragActive ? "Thả ảnh hoặc thư mục vào đây" : "Kéo thả ảnh hoặc cả thư mục, hoặc bấm để chọn ảnh"}</p>
+          <p className="mt-1 text-sm text-fg-muted">JPG hoặc PNG, tối đa {MAX_MB} MB mỗi ảnh</p>
         </div>
       </div>
-      {rejection && (
-        <p role="alert" className="mt-2 text-sm text-danger">
-          {rejection.code === "file-too-large"
-            ? `Ảnh lớn hơn ${MAX_MB} MB`
-            : rejection.code === "file-invalid-type"
-              ? "Chỉ nhận ảnh JPG hoặc PNG"
-              : rejection.message}
-        </p>
-      )}
+      <div className="flex justify-center">
+        <Button type="button" variant="secondary" size="sm" disabled={disabled} onClick={() => folderInput.current?.click()}>
+          <FolderOpen className="size-4" /> Chọn thư mục
+        </Button>
+        <input
+          ref={folderInput}
+          type="file"
+          className="hidden"
+          multiple
+          // folder picker (Chrome, Edge, Firefox, Safari)
+          {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+          onChange={(e) => {
+            const { images, skipped } = pickImages(Array.from(e.target.files ?? []));
+            e.target.value = "";
+            onFiles(images, skipped);
+          }}
+        />
+      </div>
     </div>
   );
 }
