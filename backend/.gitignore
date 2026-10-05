@@ -4,3 +4,5 @@ scripts/out/
 .env
 uploads/
 src/generated/
+models/zoo/
+scripts/real/

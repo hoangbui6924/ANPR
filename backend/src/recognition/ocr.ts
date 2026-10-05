@@ -1,5 +1,5 @@
-// Character reading with a PaddleOCR text-recognition model (ONNX) + CTC greedy decoding.
-// The model reads ONE text line, so a 2-line plate is split into its two rows first.
+// Character reading with a CTC text-recognition model (ONNX): PaddleOCR rec models, or our own plate OCR
+// (training/train_plate_ocr.py). The model reads ONE text line, so a 2-line plate is split into its two rows first.
 import fs from "node:fs";
 import sharp from "sharp";
 import ort from "onnxruntime-node";
@@ -9,13 +9,35 @@ import type { PlateBox } from "./detect.ts";
 export interface OcrModel {
   session: ort.InferenceSession;
   chars: string[]; // index 0 = CTC blank
+  /** "paddle": BGR, height 48, free width. "plate": gray, height 32, right-padded to a fixed width */
+  input: { kind: "paddle" } | { kind: "plate"; height: number; width: number };
 }
 
 /** PaddleOCR label list: blank + dictionary lines (+ space when the model was trained with use_space_char) */
 export async function loadOcr(modelPath: string, dictPath: string): Promise<OcrModel> {
   const session = await ort.InferenceSession.create(modelPath);
   const dict = fs.readFileSync(dictPath, "utf8").split(/\r?\n/).filter((l, i, a) => l !== "" || i < a.length - 1);
-  return { session, chars: ["", ...dict, " "] };
+  return { session, chars: ["", ...dict, " "], input: { kind: "paddle" } };
+}
+
+/** Our plate OCR: <name>.onnx + <name>.json (charset, input size) written by training/train_plate_ocr.py */
+export async function loadPlateOcr(modelPath: string): Promise<OcrModel> {
+  const meta = JSON.parse(fs.readFileSync(modelPath.replace(/.onnx$/, ".json"), "utf8")) as { charset: string; height: number; width: number };
+  const session = await ort.InferenceSession.create(modelPath);
+  return { session, chars: ["", ...meta.charset], input: { kind: "plate", height: meta.height, width: meta.width } };
+}
+
+/** Gray, resize to height H keeping ratio (max width W), [-1, 1], zero right-pad (mirrors train_plate_ocr.preprocess) */
+async function plateTensor(rgb: Buffer, w: number, h: number, H: number, W: number): Promise<ort.Tensor> {
+  const nw = Math.max(1, Math.min(W, Math.round((w * H) / h)));
+  const g = await sharp(rgb, { raw: { width: w, height: h, channels: 3 } })
+    .grayscale()
+    .resize(nw, H, { fit: "fill", kernel: h > H ? "mitchell" : "cubic" })
+    .raw()
+    .toBuffer();
+  const f = new Float32Array(H * W);
+  for (let y = 0; y < H; y++) for (let x = 0; x < nw; x++) f[y * W + x] = (g[y * nw + x] / 255 - 0.5) / 0.5;
+  return new ort.Tensor("float32", f, [1, 1, H, W]);
 }
 
 const REC_H = 48;
@@ -57,7 +79,7 @@ function ctcDecode(probs: Float32Array, steps: number, classes: number, chars: s
 }
 
 export async function readLine(model: OcrModel, rgb: Buffer, w: number, h: number) {
-  const tensor = await lineTensor(rgb, w, h);
+  const tensor = model.input.kind === "plate" ? await plateTensor(rgb, w, h, model.input.height, model.input.width) : await lineTensor(rgb, w, h);
   const out = await model.session.run({ [model.session.inputNames[0]]: tensor });
   const o = out[model.session.outputNames[0]];
   const [, steps, classes] = o.dims as number[];
@@ -102,6 +124,11 @@ async function rows(rgb: Buffer, w: number, h: number, cut: number) {
   ];
 }
 
+/** A plate crop as the OCR model sees it: one row, or the two rows of a 2-line plate */
+export async function plateRows(c: { data: Buffer; width: number; height: number }, type: PlateBox["type"]) {
+  return type === "2line" ? rows(c.data, c.width, c.height, splitRow(c.data, c.width, c.height)) : [c];
+}
+
 // ---------- plate enhancement before OCR ----------
 
 export interface Enhance {
@@ -109,6 +136,7 @@ export interface Enhance {
   contrast?: "none" | "normalise" | "clahe"; // global stretch or local (CLAHE) contrast
   sharpen?: boolean;
   deskew?: boolean; // rotate so the text rows are horizontal
+  upscale?: number; // enlarge (lanczos3 + unsharp mask) so each text row is at least this many px tall
 }
 
 type Rgb = { data: Buffer; width: number; height: number };
@@ -137,9 +165,13 @@ async function estimateSkew(c: Rgb): Promise<number> {
   return best;
 }
 
-export async function enhance(c: Rgb, opt: Enhance): Promise<Rgb> {
-  if (!opt.gray && (!opt.contrast || opt.contrast === "none") && !opt.sharpen && !opt.deskew) return c;
+export async function enhance(c: Rgb, opt: Enhance, rowsCount = 1): Promise<Rgb> {
+  const up = opt.upscale ? (opt.upscale * rowsCount) / c.height : 1;
+  if (!opt.gray && (!opt.contrast || opt.contrast === "none") && !opt.sharpen && !opt.deskew && up <= 1) return c;
   let s = sharp(c.data, { raw: { width: c.width, height: c.height, channels: 3 } });
+  if (up > 1) {
+    s = sharp(await s.resize(Math.round(c.width * up), Math.round(c.height * up), { kernel: "lanczos3" }).sharpen({ sigma: 1.2 }).png().toBuffer());
+  }
   if (opt.deskew) {
     const angle = await estimateSkew(c);
     if (Math.abs(angle) >= 1) s = sharp(await s.rotate(-angle, { background: "#ffffff" }).png().toBuffer());
@@ -157,9 +189,9 @@ export async function enhance(c: Rgb, opt: Enhance): Promise<Rgb> {
 }
 
 /** Read a detected plate: text per row + mean confidence */
-export async function readPlate(model: OcrModel, img: Decoded, box: PlateBox, opt: Enhance = {}) {
-  const c = await enhance(await crop(img, box), opt);
-  const lines = box.type === "2line" ? await rows(c.data, c.width, c.height, splitRow(c.data, c.width, c.height)) : [c];
+export async function readPlate(model: OcrModel, img: Decoded, box: PlateBox, opt: Enhance = {}, pad = 0.06) {
+  const c = await enhance(await crop(img, box, pad), opt, box.type === "2line" ? 2 : 1);
+  const lines = await plateRows(c, box.type);
   const parts = [];
   for (const l of lines) parts.push(await readLine(model, l.data, l.width, l.height));
   return {
