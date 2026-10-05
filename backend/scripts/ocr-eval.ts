@@ -3,7 +3,7 @@
 //   node scripts/ocr-eval.ts [count] [mode]   -> scripts/out/ocr-sheet.jpg + ocr-results.csv
 import fs from "node:fs";
 import path from "node:path";
-import sharp from "sharp";
+import sharp, { type OverlayOptions } from "sharp";
 import ort from "onnxruntime-node";
 import { decode, type ResizeMode } from "../src/recognition/image.ts";
 import { detectPlates } from "../src/recognition/detect.ts";
@@ -34,7 +34,7 @@ const step = Math.max(1, Math.floor(all.length / count));
 const files = all.filter((_, i) => i % step === 0).slice(0, count);
 
 const TILE_W = 300, TILE_H = 170;
-const tiles: sharp.OverlayOptions[] = [];
+const tiles: OverlayOptions[] = [];
 const csv = ["file,type,det_conf,model,raw,norm,text,valid,ocr_conf,ms"];
 let k = 0;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
@@ -49,7 +49,7 @@ for (const f of files) {
       const t0 = performance.now();
       const r = await readPlate(m, img, b);
       const ms = performance.now() - t0;
-      const p = postprocess(r.raw);
+      const p = postprocess(r.rows);
       cropRgb = r.crop;
       lines.push(`${name}: ${p.valid ? p.text : `${r.raw} ✗`}`);
       csv.push([f, b.type, b.conf.toFixed(3), name, JSON.stringify(r.raw), p.norm, JSON.stringify(p.text), p.valid, r.conf.toFixed(3), ms.toFixed(0)].join(","));

@@ -3,18 +3,20 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
+// backend Express (chapter 8); override with API_URL=http://localhost:3000 if needed
+const API = process.env.API_URL ?? "http://localhost:3001";
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: { "@": path.resolve(__dirname, "src") },
+    alias: { "@": path.resolve(import.meta.dirname, "src") },
   },
   server: {
     port: 5173,
-    // backend Express (chapter 8) runs on :3000
     proxy: {
-      "/api": "http://localhost:3000",
-      "/uploads": "http://localhost:3000",
-      "/socket.io": { target: "http://localhost:3000", ws: true },
+      "/api": API,
+      "/uploads": API,
+      "/socket.io": { target: API, ws: true },
     },
   },
 });

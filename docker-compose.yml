@@ -1,0 +1,20 @@
+# docs chapter 12. For development only the database runs in Docker:
+#   docker compose up -d db
+# The api + web services are added in step 8 (deployment).
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: anpr
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-anpr_dev}
+      POSTGRES_DB: anpr
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anpr -d anpr"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:

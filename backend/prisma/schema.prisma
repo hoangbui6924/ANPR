@@ -1,0 +1,70 @@
+// Database schema (docs 7.1, 7.3): users, detections, plates, vehicle_lists
+// Prisma 7: the connection URL lives in prisma.config.ts, the client is generated into src/generated.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           Int           @id @default(autoincrement())
+  username     String        @unique
+  fullName     String        @map("full_name")
+  passwordHash String        @map("password_hash")
+  role         String        @default("staff") // admin | staff
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  detections   Detection[]
+  listEntries  VehicleList[]
+
+  @@map("users")
+}
+
+model Detection {
+  id        Int      @id @default(autoincrement())
+  imagePath String   @map("image_path") // relative to the uploads dir: originals/<uuid>.jpg
+  source    String // upload | webcam
+  createdBy Int?     @map("created_by")
+  creator   User?    @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  processMs Int?     @map("process_ms")
+  createdAt DateTime @default(now()) @map("created_at")
+  plates    Plate[]
+
+  @@index([createdAt])
+  @@map("detections")
+}
+
+model Plate {
+  id          Int       @id @default(autoincrement())
+  detectionId Int       @map("detection_id")
+  detection   Detection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
+  plateText   String    @map("plate_text") // 51F-155.85
+  plateNorm   String    @map("plate_norm") // 51F15585
+  plateType   String    @map("plate_type") // 1line | 2line
+  vehicleType String?   @map("vehicle_type") // car | motorbike
+  detConf     Float     @map("det_conf")
+  ocrConf     Float     @map("ocr_conf")
+  bbox        Json // [x1, y1, x2, y2] in original image pixels
+  cropPath    String?   @map("crop_path")
+  isValid     Boolean   @map("is_valid")
+
+  @@index([plateNorm])
+  @@map("plates")
+}
+
+model VehicleList {
+  id        Int      @id @default(autoincrement())
+  plateNorm String   @unique @map("plate_norm")
+  plateText String   @map("plate_text")
+  kind      String // white | black
+  note      String?
+  createdBy Int?     @map("created_by")
+  creator   User?    @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("vehicle_lists")
+}

@@ -3,3 +3,4 @@ models/*.onnx
 scripts/out/
 .env
 uploads/
+src/generated/
