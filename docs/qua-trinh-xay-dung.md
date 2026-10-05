@@ -214,13 +214,43 @@ Nhóm thử thêm các mô hình nhận dạng mới hơn do PaddlePaddle phát 
 
 Các mô hình mới chỉ cải thiện một đến ba biển. Ở mức chữ cao khoảng 17 điểm ảnh, mọi mô hình nhận dạng chữ tổng quát đều dừng ở khoảng 45–50%. Kết luận: để đọc được biển nhỏ cần một mô hình OCR được huấn luyện riêng cho biển số Việt Nam ở độ phân giải thấp.
 
-### 5.6 Huấn luyện mô hình OCR riêng cho biển số (đang thực hiện)
+### 5.6 Huấn luyện mô hình OCR riêng cho biển số
 
 **Tạo dữ liệu bằng gán nhãn tự động.** Bộ dữ liệu không có chuỗi ký tự, nên nhóm dùng chính các mô hình mạnh nhất hiện có để gán nhãn tự động, với điều kiện chặt chẽ để hạn chế nhãn sai. Với mỗi khung biển trong nhãn gốc của tập train và valid, biển được cắt ở độ phân giải đầy đủ (nơi các mô hình đọc tốt nhất), rồi được đọc độc lập bởi hai mô hình khác nhau là PP-OCRv4 server và PP-OCRv6 medium, mỗi mô hình bỏ phiếu trên bốn biến thể. Nhãn chỉ được giữ khi kết quả của cả hai mô hình hợp lệ và trùng khớp hoàn toàn. Biển hai dòng được tách thành từng dòng theo đúng cách tách lúc nhận dạng, và nhãn của từng dòng được suy ra từ cấu trúc biển (dòng trên là mã tỉnh và seri, dòng dưới là dãy số). Tập test không được dùng ở bước này, nên mẫu đánh giá 42 biển vẫn độc lập.
 
 **Mô hình và cách huấn luyện.** Mô hình là một mạng CRNN nhỏ: phần tích chập trích đặc trưng từ ảnh xám cao 32 điểm ảnh, rộng tối đa 160, tạo ra chuỗi 40 bước theo chiều ngang; tiếp theo là hai lớp LSTM hai chiều và một lớp phân loại 37 lớp (36 ký tự 0–9, A–Z và ký tự trống của CTC). Hàm mất mát là CTC. Điểm mấu chốt là ảnh huấn luyện được làm hỏng ngẫu nhiên ở mỗi lần đọc: thu nhỏ để chữ chỉ còn cao 6 đến 40 điểm ảnh, làm mờ, nén JPEG với chất lượng 25–95, xoay và xô lệch nhẹ, thay đổi độ sáng, tương phản và thêm nhiễu, cắt hoặc nới mép ngẫu nhiên. Nhờ vậy mô hình học cách đọc biển ở điều kiện xấu thay vì chỉ ảnh rõ nét. Trong quá trình huấn luyện, độ chính xác theo dòng được đo trên tập valid ở ba mức: ảnh gốc, chữ cao 16 điểm ảnh và chữ cao 10 điểm ảnh.
 
-Kết quả của bước này sẽ được bổ sung sau khi huấn luyện xong.
+**Kết quả gán nhãn.** Với tập train, 3.187 trên 4.112 biển (77,5%) được giữ lại, tạo thành 5.283 ảnh dòng chữ; 444 biển bị loại vì chuỗi đọc được không hợp lệ và 481 biển vì hai mô hình không thống nhất. Với tập valid, 396 trên 521 biển (76,0%) được giữ, tạo thành 651 ảnh dòng chữ. Kiểm tra bằng mắt 40 ảnh dòng chữ chọn ngẫu nhiên cho thấy toàn bộ nhãn đều đúng, kể cả biển nền vàng, biển nền tối và biển mờ. Cần lưu ý rằng cách lọc này ưu tiên những biển dễ đọc, nên tập dữ liệu thiên về biển rõ; nhược điểm này được bù lại bằng việc làm hỏng ảnh khi huấn luyện.
+
+**Các vấn đề kỹ thuật khi huấn luyện.** Lần chạy đầu gặp lỗi "hết bộ nhớ GPU" giả trong lớp LSTM khi dùng độ chính xác hỗn hợp (fp16), dù GPU vẫn còn trống hơn 3 GB; cách khắc phục là cho riêng lớp LSTM chạy ở fp32. Lần thứ hai bị treo do các tiến trình phụ nạp dữ liệu trên Windows; vì bước làm hỏng ảnh rất nhẹ (dưới 1 ms mỗi ảnh), nhóm bỏ hẳn tiến trình phụ và nạp dữ liệu ngay trong tiến trình chính. Sau đó mỗi epoch chỉ mất khoảng 6 giây.
+
+**Hai lần huấn luyện.** Lần thứ nhất huấn luyện 60 epoch, mọi ảnh đều bị thu nhỏ ngẫu nhiên. Mô hình hội tụ chậm trong khoảng 10 epoch đầu (giai đoạn mô hình CTC chủ yếu dự đoán ký tự trống), sau đó tăng nhanh. Kết quả tốt nhưng chưa bão hòa, và khi dùng riêng thì kém PaddleOCR ở biển cỡ vừa. Lần thứ hai huấn luyện 150 epoch và giữ 25% mẫu ở độ phân giải gốc, để mô hình vừa đọc tốt biển rõ vừa đọc được biển nhỏ. Mô hình tốt nhất (epoch 132) có kích thước 8 MB, nhỏ hơn hơn mười lần so với mô hình PaddleOCR server (90 MB).
+
+Độ chính xác theo dòng chữ trên tập valid:
+
+| Lần huấn luyện | Ảnh gốc | Chữ cao 16 px | Chữ cao 10 px |
+|---|---|---|---|
+| Lần 1 (60 epoch) | 87,9% | 84,6% | 56,8% |
+| Lần 2 (150 epoch, 25% ảnh gốc) | 96,0% | 93,1% | 65,1% |
+
+**Kết hợp với PaddleOCR.** Khi đo trên bộ thử biển nhỏ với khung nhãn gốc, mô hình riêng lần 2 ngang PaddleOCR ở mức ×0,5 và vượt xa ở các mức nhỏ hơn. Hai mô hình có điểm mạnh bổ sung cho nhau: PaddleOCR tốt với biển cỡ vừa và lớn, mô hình riêng tốt với biển rất nhỏ. Vì vậy nhóm cho hai mô hình cùng bỏ phiếu: mỗi mô hình đọc bốn biến thể, tám kết quả được gộp vào một lần bỏ phiếu chung.
+
+| OCR (trên khung nhãn gốc) | ×0,5 | ×0,35 | ×0,25 |
+|---|---|---|---|
+| PaddleOCR v4 server | 34/43 | 27/43 | 19/43 |
+| Mô hình riêng lần 1 | 29/43 | 25/43 | 22/43 |
+| Mô hình riêng lần 2 | 34/43 | 32/43 | 28/43 |
+| PaddleOCR + mô hình riêng lần 2 | 38/43 | 34/43 | 28/43 |
+
+Kết quả trên toàn bộ chuỗi xử lý (bao gồm cả khâu phát hiện), số biển đọc đúng trên 42:
+
+| Cấu hình | ×1 | ×0,5 | ×0,35 | ×0,25 | Thời gian mỗi ảnh (CPU) |
+|---|---|---|---|---|---|
+| Chỉ PaddleOCR | 35 | 37 | 30 | 21 | 282 ms |
+| Chỉ mô hình riêng | 36 | 35 | 33 | 26 | 156 ms |
+| PaddleOCR + mô hình riêng | 37 | 36 | 34 | 27 | 349 ms |
+
+Cấu hình kết hợp được chọn làm mặc định vì chính xác nhất ở hầu hết các mức; ở mức chữ cao khoảng 17 điểm ảnh, số biển đọc đúng tăng từ 21 lên 27 (khoảng 29%). Nếu cần tốc độ, có thể chỉ dùng mô hình riêng: nhanh gần gấp đôi mà vẫn tốt hơn PaddleOCR với biển nhỏ. Ảnh thực tế ở mục 5.1 vẫn được đọc đúng với cấu hình mới.
 
 ---
 
@@ -271,7 +301,7 @@ Trong giai đoạn chưa có backend, giao diện chạy với một bộ dữ l
 |---|---|---|
 | PyTorch CUDA 12.8 | PyTorch CUDA 11.8 | Driver GPU 517.48 không hỗ trợ CUDA 12.8 |
 | Batch 16 khi huấn luyện | Batch 8 | Hết bộ nhớ GPU 6 GB ở bước đánh giá |
-| YOLO11 nhận dạng ký tự | PaddleOCR (ONNX), sau đó huấn luyện CRNN riêng | Không có dữ liệu gán nhãn ký tự; PaddleOCR yếu với biển nhỏ |
+| YOLO11 nhận dạng ký tự | PaddleOCR (ONNX) kết hợp mô hình CRNN tự huấn luyện | Không có dữ liệu gán nhãn ký tự (dùng gán nhãn tự động); PaddleOCR yếu với biển nhỏ |
 | Letterbox khi nhận dạng | Ban đầu kéo giãn, sau chuyển sang letterbox | Ảnh huấn luyện bị kéo giãn; ảnh thực tế chữ nhật cho thấy letterbox tốt hơn |
 | Một lần đọc mỗi biển | Bỏ phiếu trên bốn biến thể | Kết quả OCR với biển nhỏ không ổn định |
 | shadcn/ui | Bộ thành phần giao diện tự viết cùng phong cách | Công cụ cài đặt của shadcn/ui cần thao tác tương tác |

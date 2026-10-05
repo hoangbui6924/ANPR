@@ -1,0 +1,9 @@
+{
+  "charset": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+  "height": 32,
+  "width": 160,
+  "channels": 1,
+  "normalize": "(x/255-0.5)/0.5",
+  "pad": 0,
+  "best_score": 0.8474
+}

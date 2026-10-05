@@ -1,10 +1,11 @@
 // Recognition entry point: image -> plates (shape of docs 8.2 "plates" items).
 // Sessions are created ONCE at server start and reused for every request (docs 6.5).
+import fs from "node:fs";
 import path from "node:path";
 import ort from "onnxruntime-node";
 import { decode, type Decoded, type ResizeMode } from "./image.ts";
 import { detectPlates, detectPlatesTiled, type PlateBox, type PlateType } from "./detect.ts";
-import { loadOcr, readPlate, type Enhance, type OcrModel } from "./ocr.ts";
+import { loadOcr, loadPlateOcr, readPlate, type Enhance, type OcrModel } from "./ocr.ts";
 import { postprocess, type PlateText, type Vehicle } from "./postprocess.ts";
 
 export interface RecognizedPlate {
@@ -72,6 +73,10 @@ export interface RecognizerOptions {
   modelsDir: string;
   ocrModel?: string; // PaddleOCR rec model (ONNX)
   ocrDict?: string;
+  /** our plate OCR (training/train_plate_ocr.py); votes together with PaddleOCR. null = PaddleOCR only */
+  plateOcrModel?: string | null;
+  /** use only the plate OCR, no PaddleOCR */
+  plateOcrOnly?: boolean;
   resize?: ResizeMode;
   minDetConf?: number; // boxes above this are always reported
   lowDetConf?: number; // boxes between lowDetConf and minDetConf are kept only if they read as a valid VN plate
@@ -86,6 +91,8 @@ export async function createRecognizer({
   modelsDir,
   ocrModel = "rec_ch_v4_server.onnx",
   ocrDict = "ppocr_keys_v1.txt",
+  plateOcrModel = "plate_ocr_v2.onnx",
+  plateOcrOnly = false,
   resize = "letterbox",
   minDetConf = 0.4,
   lowDetConf = 0.4,
@@ -95,7 +102,10 @@ export async function createRecognizer({
   smallRowPx = 28,
 }: RecognizerOptions) {
   const det = await ort.InferenceSession.create(path.join(modelsDir, "plate.onnx"));
-  const ocr: OcrModel = await loadOcr(path.join(modelsDir, ocrModel), path.join(modelsDir, ocrDict));
+  const ocr: OcrModel[] = [];
+  if (!plateOcrOnly) ocr.push(await loadOcr(path.join(modelsDir, ocrModel), path.join(modelsDir, ocrDict)));
+  if (plateOcrModel && fs.existsSync(path.join(modelsDir, plateOcrModel))) ocr.push(await loadPlateOcr(path.join(modelsDir, plateOcrModel)));
+  if (!ocr.length) throw new Error("no OCR model available");
 
   return async function recognize(image: Buffer | string): Promise<{ plates: RecognizedPlate[]; width: number; height: number; ms: number }> {
     const t0 = performance.now();
