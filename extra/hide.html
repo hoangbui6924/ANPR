@@ -178,6 +178,7 @@
         const STICKER_EMOJIS = ["💖", "💌", "🌹", "💕", "🥰"];
         const EXPLODE_DURATION = 5; // giây
         const BLOOM_STRENGTH = 0.9;
+        const SHOW_SMALL_HEARTS = true; // trái tim nhỏ bay quanh: đặt true để hiện lại
         // =============================================
 
         var defined = 'QXV0aG9yOiBMdWMg';
@@ -843,7 +844,7 @@
         for (let i = 0; i < 6; i++) {
             addOrbiter(makeSticker(i), rand(9, 20), rand(1.5, 3.5), i / 6 * Math.PI * 2 + 0.5, 0.5, 0.4);
         }
-        for (let i = 0; i < 14; i++) {
+        for (let i = 0; i < (SHOW_SMALL_HEARTS ? 14 : 0); i++) {
             addOrbiter(makeHeartSprite(), rand(5, 20), rand(1, 6), Math.random() * Math.PI * 2, 0.7, 0.8);
         }
         decor.scale.setScalar(0.001);
