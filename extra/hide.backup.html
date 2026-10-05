@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta author="Luc Thien Phong">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universe</title>
+</head>
+<style>
+    body {
+        overflow: hidden;
+        margin: 0;
+    }
+
+    #word img {
+        width: 100px;
+        position: absolute;
+        margin: 10;
+    }
+
+    #pad {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        display: grid;
+        grid-template-columns: repeat(3, 48px);
+        grid-template-rows: repeat(3, 48px);
+        gap: 6px;
+        user-select: none;
+        -webkit-user-select: none;
+        touch-action: none;
+    }
+
+    #pad button {
+        border: 1px solid rgba(209, 124, 196, 0.6);
+        border-radius: 10px;
+        background: rgba(42, 40, 154, 0.35);
+        color: #fff;
+        font-size: 20px;
+        cursor: pointer;
+        backdrop-filter: blur(4px);
+    }
+
+    #pad button:hover {
+        background: rgba(209, 124, 196, 0.4);
+    }
+
+    #pad button:active {
+        background: rgba(209, 124, 196, 0.7);
+    }
+
+    #hint {
+        position: fixed;
+        left: 20px;
+        bottom: 20px;
+        color: rgba(255, 255, 255, 0.6);
+        font: 13px/1.5 sans-serif;
+        pointer-events: none;
+    }
+
+    /* Controls stay hidden until the intro is started */
+    #pad,
+    #hint {
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 1s ease 2.5s, visibility 0s linear 2.5s;
+    }
+
+    body.started #pad,
+    body.started #hint {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    #intro {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: radial-gradient(circle at center, rgba(22, 0, 22, 0.2), rgba(22, 0, 22, 0.75));
+        z-index: 10;
+        transition: opacity 0.8s ease, visibility 0s linear 0.8s;
+    }
+
+    body.started #intro {
+        opacity: 0;
+        visibility: hidden;
+    }
+
+    #intro .card {
+        max-width: 380px;
+        width: 100%;
+        padding: 32px 28px;
+        text-align: center;
+        color: #fff;
+        font-family: sans-serif;
+        border: 1px solid rgba(209, 124, 196, 0.45);
+        border-radius: 18px;
+        background: rgba(42, 40, 154, 0.18);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        box-shadow: 0 0 60px rgba(209, 124, 196, 0.25);
+        transform: translateY(0) scale(1);
+        transition: transform 0.8s ease;
+    }
+
+    body.started #intro .card {
+        transform: translateY(-20px) scale(0.95);
+    }
+
+    #intro h1 {
+        margin: 0 0 8px;
+        font-size: 32px;
+        letter-spacing: 6px;
+        font-weight: 300;
+    }
+
+    #intro p {
+        margin: 0 0 24px;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    #startBtn {
+        padding: 12px 40px;
+        font-size: 16px;
+        letter-spacing: 2px;
+        color: #fff;
+        border: none;
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgb(42, 40, 154), rgb(209, 124, 196));
+        box-shadow: 0 0 24px rgba(209, 124, 196, 0.6);
+        cursor: pointer;
+        animation: glow 2s ease-in-out infinite;
+    }
+
+    #startBtn:hover {
+        transform: scale(1.05);
+    }
+
+    @keyframes glow {
+        50% {
+            box-shadow: 0 0 40px rgba(209, 124, 196, 0.95);
+        }
+    }
+</style>
+
+<body>
+    <div id="word">
+        <a href="https://www.crf-blogger.gq/">
+            <img width="300" src="https://cdn.ltp110.tk/images/logo/logo.jpg" title="ltp" />
+        </a>
+
+    </div>
+
+    <div id="pad">
+        <span></span>
+        <button data-dir="up" title="Xoay lên (↑ / W)">↑</button>
+        <span></span>
+        <button data-dir="left" title="Xoay trái (← / A)">←</button>
+        <button data-dir="reset" title="Đặt lại (R)">⟳</button>
+        <button data-dir="right" title="Xoay phải (→ / D)">→</button>
+        <span></span>
+        <button data-dir="down" title="Xoay xuống (↓ / S)">↓</button>
+        <span></span>
+    </div>
+    <div id="intro">
+        <div class="card">
+            <h1>UNIVERSE</h1>
+            <p>Hàng trăm nghìn vì sao đang chờ được giải phóng.<br>Bấm để khai sinh thiên hà.</p>
+            <button id="startBtn">BẮT ĐẦU</button>
+        </div>
+    </div>
+    <div id="hint">Kéo chuột / phím mũi tên / WASD: xoay &nbsp;·&nbsp; Cuộn chuột: zoom &nbsp;·&nbsp; R: đặt lại</div>
+
+    <script type="module">
+        import * as THREE from "https://cdn.skypack.dev/three@0.136.0";
+        import { OrbitControls } from "https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/OrbitControls";
+
+        var defined = 'QXV0aG9yOiBMdWMg';
+        var datacenter = ['aHR0cHM6L', 'y93d3cuZmF', 'jZWJvb2suY29t'];
+        let scene = new THREE.Scene();
+        scene.background = new THREE.Color('#160016');
+        let camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 1, 1000);
+        camera.position.set(0, 4, 21);
+        let renderer = new THREE.WebGLRenderer();
+        renderer.setSize(innerWidth, innerHeight);
+        document.body.appendChild(renderer.domElement);
+        window.addEventListener("resize", event => {
+            camera.aspect = innerWidth / innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(innerWidth, innerHeight);
+        })
+        datacenter.push('L3Byb2ZpbGUu');
+        let controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.enablePan = false;
+        datacenter.push('cGhwP2lkPTEw');
+        controls.enabled = false; // locked until the intro is started
+        let gu = {
+            time: { value: 0 },
+            progress: { value: 0 } // 0 = collapsed into the core, 1 = full galaxy
+        }
+        defined = defined.concat('VGhpZW4gUGhvbmc=');
+        let sizes = [];
+        let shift = [];
+        let pushShift = () => {
+            shift.push(
+                Math.random() * Math.PI,
+                Math.random() * Math.PI * 2,
+                (Math.random() * 0.9 + 0.1) * Math.PI * 0.1,
+                Math.random() * 0.9 + 0.1
+            );
+        }
+        datacenter.push('MDA0NTQwNj');
+        var context = atob(defined);
+        let pts = new Array(50000).fill().map(p => {
+            sizes.push(Math.random() * 1.5 + 0.5);
+            pushShift();
+            return new THREE.Vector3().randomDirection().multiplyScalar(Math.random() * 0.5 + 9.5);
+        })
+        for (let i = 0; i < 100000; i++) {
+            let r = 10, R = 40;
+            let rand = Math.pow(Math.random(), 1.5);
+            let radius = Math.sqrt(R * R * rand + (1 - rand) * r * r);
+            pts.push(new THREE.Vector3().setFromCylindricalCoords(radius, Math.random() * 2 * Math.PI, (Math.random() - 0.5) * 2));
+            sizes.push(Math.random() * 1.5 + 0.5);
+            pushShift();
+        }
+        console.log(context);
+        datacenter.push('I2MTQ5MQ' + '==');
+        let g = new THREE.BufferGeometry().setFromPoints(pts);
+        g.setAttribute("sizes", new THREE.Float32BufferAttribute(sizes, 1));
+        g.setAttribute("shift", new THREE.Float32BufferAttribute(shift, 4));
+        // Per-point delay so the explosion spreads out instead of happening all at once
+        g.setAttribute("delay", new THREE.Float32BufferAttribute(pts.map(() => Math.random()), 1));
+        let m = new THREE.PointsMaterial({
+            size: 0.125,
+            transparent: true,
+            depthTest: false,
+            blending: THREE.AdditiveBlending,
+            onBeforeCompile: shader => {
+                shader.uniforms.time = gu.time;
+                shader.uniforms.progress = gu.progress;
+                shader.vertexShader = `
+                    uniform float time;
+                    uniform float progress;
+                    attribute float sizes;
+                    attribute vec4 shift;
+                    attribute float delay;
+                    varying vec3 vColor;
+                    varying float vK;
+                    ${shader.vertexShader}
+                `.replace(
+                    `gl_PointSize = size;`,
+                    `gl_PointSize = size * sizes;`
+                ).replace(
+                    `#include <color_vertex>`,
+                    `#include <color_vertex>
+                    float d = length(abs(position) / vec3(40., 10., 40));
+                    d = clamp(d, 0., 1.);
+                    vColor = mix(vec3(42,40,154), vec3(209,124,196), d) / 255.;
+                `).replace(
+                        `#include <begin_vertex>`,
+                        `#include <begin_vertex>
+                    float t = time;
+                    float moveT = mod(shift.x + shift.z * t, PI2);
+                    float moveS = mod(shift.y + shift.z * t, PI2);
+                    transformed += vec3(cos(moveS) * sin(moveT), cos(moveT), sin(moveS) * sin(moveT)) * shift.a;
+
+                    // Explosion: each point flies out from the core along a spiral
+                    float k = clamp((progress - delay * 0.4) / 0.6, 0., 1.);
+                    k = 1. - pow(1. - k, 3.); // ease-out cubic
+                    float ang = (1. - k) * 4.;
+                    float ca = cos(ang), sa = sin(ang);
+                    transformed.xz = mat2(ca, -sa, sa, ca) * transformed.xz;
+                    transformed *= mix(0.015, 1., k);
+                    vK = k;
+                `);
+                // console.log(shader.vertexShader);
+                shader.fragmentShader = `
+                varying vec3 vColor;
+                varying float vK;
+                ${shader.fragmentShader}
+                `.replace(
+                    `#include <clipping_planes_fragment>`,
+                    `#include <clipping_planes_fragment>
+                    float d = length(gl_PointCoord.xy - 0.5);
+                    if (d > 0.5) discard;
+                `).replace(
+                        `vec4 diffuseColor = vec4( diffuse, opacity );`,
+                        `vec4 diffuseColor = vec4( vColor, smoothstep(0.5, 0.1, d) * mix(0.04, 1., vK) );`
+                    );
+                // console.log(shader.fragmentShader);
+            }
+        });
+        let p = new THREE.Points(g, m);
+        p.rotation.order = "ZYX";
+        p.rotation.z = 0.2;
+
+        // Pivot group: rotated freely (360° in every direction) by keys / buttons
+        let pivot = new THREE.Group();
+        pivot.add(p);
+        scene.add(pivot);
+
+        const ROT_SPEED = 1.2; // radians per second
+        const AXIS_X = new THREE.Vector3(1, 0, 0);
+        const AXIS_Y = new THREE.Vector3(0, 1, 0);
+        let input = { up: false, down: false, left: false, right: false };
+        let velX = 0, velY = 0;
+
+        let resetView = () => {
+            pivot.quaternion.identity();
+            velX = velY = 0;
+            controls.reset();
+        };
+
+        const keyMap = {
+            ArrowUp: "up", KeyW: "up",
+            ArrowDown: "down", KeyS: "down",
+            ArrowLeft: "left", KeyA: "left",
+            ArrowRight: "right", KeyD: "right"
+        };
+        // Intro: "Bắt đầu" releases the points from the core
+        const EXPLODE_DURATION = 4; // seconds
+        let started = false;
+        let start = () => {
+            if (started) return;
+            started = true;
+            document.body.classList.add("started");
+            controls.enabled = true;
+        };
+        document.getElementById("startBtn").addEventListener("click", start);
+
+        window.addEventListener("keydown", e => {
+            if (!started) {
+                if (e.code === "Enter" || e.code === "Space") start();
+                return;
+            }
+            if (keyMap[e.code]) { input[keyMap[e.code]] = true; e.preventDefault(); }
+            if (e.code === "KeyR") resetView();
+        });
+        window.addEventListener("keyup", e => {
+            if (keyMap[e.code]) input[keyMap[e.code]] = false;
+        });
+        window.addEventListener("blur", () => {
+            for (let k in input) input[k] = false;
+        });
+
+        document.querySelectorAll("#pad button").forEach(btn => {
+            let dir = btn.dataset.dir;
+            if (dir === "reset") {
+                btn.addEventListener("click", resetView);
+                return;
+            }
+            let on = e => { input[dir] = true; e.preventDefault(); };
+            let off = () => { input[dir] = false; };
+            btn.addEventListener("pointerdown", on);
+            btn.addEventListener("pointerup", off);
+            btn.addEventListener("pointerleave", off);
+            btn.addEventListener("pointercancel", off);
+        });
+
+        controls.saveState();
+        const data = atob(datacenter.join(''));
+        let clock = new THREE.Clock();
+        console.log(data);
+        let lastT = 0;
+        renderer.setAnimationLoop(() => {
+            controls.update();
+            let elapsed = clock.getElapsedTime();
+            let dt = Math.min(elapsed - lastT, 0.1);
+            lastT = elapsed;
+
+            if (started && gu.progress.value < 1) {
+                gu.progress.value = Math.min(gu.progress.value + dt / EXPLODE_DURATION, 1);
+            }
+
+            // Smoothly accelerate / decelerate rotation from keys & buttons
+            let targetX = (input.down - input.up) * ROT_SPEED;
+            let targetY = (input.right - input.left) * ROT_SPEED;
+            let ease = 1 - Math.exp(-dt * 8);
+            velX += (targetX - velX) * ease;
+            velY += (targetY - velY) * ease;
+            if (Math.abs(velX) > 1e-4) pivot.rotateOnWorldAxis(AXIS_X, velX * dt);
+            if (Math.abs(velY) > 1e-4) pivot.rotateOnWorldAxis(AXIS_Y, velY * dt);
+
+            let t = elapsed * 0.5;
+            gu.time.value = t * Math.PI;
+            p.rotation.y = t * 0.05;
+            renderer.render(scene, camera);
+        });
+    </script>
+</body>
+
+</html>

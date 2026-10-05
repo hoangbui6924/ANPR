@@ -1,7 +1,4 @@
-hide.backup.html
 node_modules/
-# personal photo + generated star data: kept out of the (public) repo
-img/
 # training environment, datasets and training outputs
 .venv/
 datasets/
