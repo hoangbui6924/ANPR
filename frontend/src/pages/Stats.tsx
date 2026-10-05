@@ -56,7 +56,7 @@ export function StatsPage() {
             href="/u/index.html"
             tabIndex={-1}
             aria-hidden="true"
-            className="select-none px-2 text-sm text-fg-muted opacity-[0.08] transition-opacity duration-700 hover:opacity-40"
+            className="twinkle inline-block select-none px-2 text-lg text-primary transition-transform duration-500 hover:scale-125 hover:opacity-100 motion-reduce:animate-none"
           >
             ✦
           </a>

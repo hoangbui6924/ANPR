@@ -84,3 +84,23 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* a small twinkling star: subtle, but noticeable for those who look */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.28; }
+  45% { opacity: 0.28; }
+  55% { opacity: 0.75; text-shadow: 0 0 8px var(--primary); }
+  65% { opacity: 0.28; }
+}
+.twinkle {
+  opacity: 0.28;
+  animation: twinkle 5s ease-in-out infinite;
+}
+.twinkle:hover {
+  animation: none;
+  opacity: 1;
+  text-shadow: 0 0 10px var(--primary);
+}
+@media (prefers-reduced-motion: reduce) {
+  .twinkle { animation: none; }
+}
