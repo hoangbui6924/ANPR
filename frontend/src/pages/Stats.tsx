@@ -48,7 +48,20 @@ export function StatsPage() {
 
   return (
     <>
-      <PageHeader title="Thống kê" description="Số lượt nhận dạng, tỷ lệ loại xe và tỷ lệ biển đọc hợp lệ." />
+      <PageHeader
+        title="Thống kê"
+        description="Số lượt nhận dạng, tỷ lệ loại xe và tỷ lệ biển đọc hợp lệ."
+        action={
+          <a
+            href="/u/index.html"
+            tabIndex={-1}
+            aria-hidden="true"
+            className="select-none px-2 text-sm text-fg-muted opacity-[0.08] transition-opacity duration-700 hover:opacity-40"
+          >
+            ✦
+          </a>
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat icon={<ScanLine className="size-4" />} label="Lượt nhận dạng" value={fmt.number(s.totalDetections)} hint={`${s.today} lượt hôm nay`} />
