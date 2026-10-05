@@ -252,6 +252,14 @@ Kết quả trên toàn bộ chuỗi xử lý (bao gồm cả khâu phát hiện
 
 Cấu hình kết hợp được chọn làm mặc định vì chính xác nhất ở hầu hết các mức; ở mức chữ cao khoảng 17 điểm ảnh, số biển đọc đúng tăng từ 21 lên 27 (khoảng 29%). Nếu cần tốc độ, có thể chỉ dùng mô hình riêng: nhanh gần gấp đôi mà vẫn tốt hơn PaddleOCR với biển nhỏ. Ảnh thực tế ở mục 5.1 vẫn được đọc đúng với cấu hình mới.
 
+### 5.7 Ảnh lớn có nhiều xe: phát hiện theo ô và gộp nhiều lần nhìn thấy
+
+Bộ thử biển nhỏ ở mục 5.3 được tạo từ ảnh gốc 640×640 nên chưa phản ánh một tình huống thường gặp: ảnh chụp đường phố có độ phân giải lớn với nhiều xe ở xa. Với một ảnh đường phố 1566×853 điểm ảnh, hệ thống ban đầu chỉ trả về 2 biển trong khi mắt người đọc được ít nhất 5 biển. Nguyên nhân lần này nằm ở khâu phát hiện: ảnh bị thu nhỏ khoảng 2,4 lần khi đưa về 640 điểm ảnh, nên nhiều biển chỉ còn rộng 15–25 điểm ảnh trong đầu vào của mô hình.
+
+Giải pháp gồm ba phần. Thứ nhất, với ảnh có cạnh dài lớn hơn 960 điểm ảnh, ngoài lần phát hiện trên toàn ảnh, hệ thống còn chia ảnh thành bốn ô chồng lấn nhau (mỗi ô khoảng 62% kích thước ảnh) và phát hiện trên từng ô; mỗi ô được phóng về 640 điểm ảnh nên biển nhỏ trông to gấp khoảng hai lần với mô hình. Thứ hai, các khung trùng nhau giữa toàn ảnh và các ô được gom thành một nhóm đại diện cho cùng một biển; thay vì chỉ giữ một khung, hệ thống đọc biển trên hai khung có độ tin cậy cao nhất của nhóm và gộp tất cả kết quả vào một lần bỏ phiếu. Cách này quan trọng vì khung từ ô phóng to đôi khi có độ tin cậy cao hơn nhưng cắt biển kém hơn; khi chỉ giữ một khung, ảnh thực tế ở mục 5.1 từng bị đọc sai. Để tiết kiệm thời gian, nếu khung thứ nhất đã cho ít nhất 75% kết quả trùng khớp thì bỏ qua khung thứ hai. Thứ ba, ngưỡng độ tin cậy được hạ xuống 0,25 cho những khung đọc ra chuỗi hợp lệ, và khi chuỗi đọc được không hợp lệ, hệ thống thử đọc lại với loại biển ngược lại (một dòng hay hai dòng), vì mô hình phát hiện đôi khi nhầm loại với biển nhỏ.
+
+Kết quả: ảnh đường phố trên được nhận đủ 5 biển và đọc đúng cả 5 (trong đó có một biển hai dòng của xe bán tải và một biển chỉ đạt độ tin cậy phát hiện 0,26), ảnh thực tế ở mục 5.1 vẫn đọc đúng, và bộ thử biển nhỏ không bị giảm (37/36/34/27). Đổi lại, thời gian xử lý ảnh lớn tăng lên khoảng 1–2,3 giây trên CPU, tùy số biển trong ảnh.
+
 ---
 
 ## 6. Cơ sở dữ liệu và backend API

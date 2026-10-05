@@ -24,7 +24,7 @@ export function ImageWithBoxes({
       <img
         src={src}
         alt="Ảnh nhận dạng"
-        className="block max-h-[60vh] w-auto max-w-full"
+        className="block max-h-[78vh] w-auto max-w-full"
         onLoad={(e) => setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
       />
       {size &&

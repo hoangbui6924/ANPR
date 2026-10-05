@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import ort from "onnxruntime-node";
 import { decode, type Decoded, type ResizeMode } from "./image.ts";
-import { detectPlates, detectPlatesTiled, type PlateBox, type PlateType } from "./detect.ts";
+import { detectPlates, detectPlatesTiled, type PlateBox, type PlateGroup, type PlateType } from "./detect.ts";
 import { loadOcr, loadPlateOcr, readPlate, type Enhance, type OcrModel } from "./ocr.ts";
 import { postprocess, type PlateText, type Vehicle } from "./postprocess.ts";
 
@@ -47,12 +47,21 @@ export const SMALL_VARIANTS: ReadVariant[] = [
  * Majority vote over valid readings (ties -> higher confidence); falls back to the most confident reading.
  * Several OCR models can vote together (e.g. PaddleOCR + our plate OCR): all their readings go in one ballot.
  */
-export async function readBest(ocr: OcrModel | OcrModel[], img: Decoded, box: PlateBox, variants: ReadVariant[]) {
+export async function readBest(ocr: OcrModel | OcrModel[], img: Decoded, box: PlateBox | PlateBox[], variants: ReadVariant[]) {
   const reads: (PlateText & { conf: number; raw: string })[] = [];
-  for (const m of Array.isArray(ocr) ? ocr : [ocr]) {
-    for (const v of variants) {
-      const r = await readPlate(m, img, box, v.enhance, v.pad);
-      reads.push({ ...postprocess(r.rows), conf: r.conf, raw: r.raw });
+  // a plate seen several times (full image + tiles) is read on each sighting; all readings vote together
+  for (const bx of Array.isArray(box) ? box : [box]) {
+    if (reads.length) {
+      // early stop: the readings so far already agree strongly (>= 75% on one valid string)
+      const counts = new Map<string, number>();
+      for (const r of reads) if (r.valid) counts.set(r.norm, (counts.get(r.norm) ?? 0) + 1);
+      if (Math.max(0, ...counts.values()) >= reads.length * 0.75) break;
+    }
+    for (const m of Array.isArray(ocr) ? ocr : [ocr]) {
+      for (const v of variants) {
+        const r = await readPlate(m, img, bx, v.enhance, v.pad);
+        reads.push({ ...postprocess(r.rows), conf: r.conf, raw: r.raw });
+      }
     }
   }
   const valid = reads.filter((r) => r.valid);
@@ -80,7 +89,10 @@ export interface RecognizerOptions {
   resize?: ResizeMode;
   minDetConf?: number; // boxes above this are always reported
   lowDetConf?: number; // boxes between lowDetConf and minDetConf are kept only if they read as a valid VN plate
-  tiles?: "off" | "auto" | "always"; // auto: tile pass only when the full image gives no confident plate
+  /** auto: tiled pass for large images (plates shrink a lot at 640) or when no confident plate was found */
+  tiles?: "off" | "auto" | "always";
+  /** images whose long side exceeds this many px get the tiled pass in "auto" mode */
+  tileAbovePx?: number;
   variants?: ReadVariant[];
   smallVariants?: ReadVariant[];
   smallRowPx?: number;
@@ -95,8 +107,9 @@ export async function createRecognizer({
   plateOcrOnly = false,
   resize = "letterbox",
   minDetConf = 0.4,
-  lowDetConf = 0.4,
-  tiles = "off",
+  lowDetConf = 0.25,
+  tiles = "auto",
+  tileAbovePx = 960,
   variants = DEFAULT_VARIANTS,
   smallVariants = [],
   smallRowPx = 28,
@@ -111,14 +124,24 @@ export async function createRecognizer({
     const t0 = performance.now();
     const img = await decode(image);
     const detOpts = { mode: resize, minConf: Math.min(minDetConf, lowDetConf) };
-    let boxes = await detectPlates(det, img, detOpts);
-    if (tiles === "always" || (tiles === "auto" && !boxes.some((b) => b.conf >= minDetConf))) {
-      boxes = await detectPlatesTiled(det, img, detOpts);
+    let groups: PlateGroup[] = (await detectPlates(det, img, detOpts)).map((b) => ({ box: b, members: [b] }));
+    const large = Math.max(img.width, img.height) > tileAbovePx;
+    if (tiles === "always" || (tiles === "auto" && (large || !groups.some((g) => g.box.conf >= minDetConf)))) {
+      groups = await detectPlatesTiled(det, img, detOpts);
     }
     const plates: RecognizedPlate[] = [];
-    for (const b of boxes) {
+    for (const g of groups) {
+      let b = g.box;
+      const sightings = g.members.slice(0, 2); // the two most confident sightings (full image / tile)
       const rowPx = (b.y2 - b.y1) / (b.type === "2line" ? 2 : 1);
-      const r = await readBest(ocr, img, b, rowPx < smallRowPx ? [...variants, ...smallVariants] : variants);
+      const vs = rowPx < smallRowPx ? [...variants, ...smallVariants] : variants;
+      let r = await readBest(ocr, img, sightings, vs);
+      if (!r.valid) {
+        // the detector sometimes swaps 1-line / 2-line on small plates: try reading it as the other type
+        const flip = (x: PlateBox): PlateBox => ({ ...x, type: x.type === "1line" ? "2line" : "1line" });
+        const r2 = await readBest(ocr, img, sightings.map(flip), vs);
+        if (r2.valid) { r = r2; b = flip(b); }
+      }
       if (b.conf < minDetConf && !r.valid) continue; // weak box that does not read as a plate: likely a false detection
       plates.push({
         text: r.valid ? r.text : r.raw,

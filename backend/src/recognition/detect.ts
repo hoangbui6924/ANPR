@@ -42,17 +42,30 @@ const area = (b: PlateBox) => Math.max(0, b.x2 - b.x1) * Math.max(0, b.y2 - b.y1
 const inter = (a: PlateBox, b: PlateBox) =>
   Math.max(0, Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1)) * Math.max(0, Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1));
 
-/** Class-agnostic NMS; also drops a box mostly contained in a stronger one (tile edges cut plates in half) */
-export function mergeBoxes(boxes: PlateBox[], iou = 0.45): PlateBox[] {
-  const kept: PlateBox[] = [];
+const same = (a: PlateBox, b: PlateBox, iou: number) => {
+  const i = inter(a, b);
+  return i / (area(a) + area(b) - i) > iou || i / Math.min(area(a), area(b)) > 0.7;
+};
+
+/** A plate seen one or more times (full image / tiles). `box` is the most confident sighting. */
+export interface PlateGroup {
+  box: PlateBox;
+  members: PlateBox[]; // all sightings, most confident first
+}
+
+/** Class-agnostic grouping: overlapping boxes, or one mostly inside another (cut by a tile edge), are the same plate */
+export function groupBoxes(boxes: PlateBox[], iou = 0.45): PlateGroup[] {
+  const groups: PlateGroup[] = [];
   for (const b of [...boxes].sort((a, c) => c.conf - a.conf)) {
-    const dup = kept.some((k) => {
-      const i = inter(k, b);
-      return i / (area(k) + area(b) - i) > iou || i / Math.min(area(k), area(b)) > 0.7;
-    });
-    if (!dup) kept.push(b);
+    const g = groups.find((x) => same(x.box, b, iou));
+    if (g) g.members.push(b);
+    else groups.push({ box: b, members: [b] });
   }
-  return kept;
+  return groups;
+}
+
+export function mergeBoxes(boxes: PlateBox[], iou = 0.45): PlateBox[] {
+  return groupBoxes(boxes, iou).map((g) => g.box);
 }
 
 /**
@@ -63,7 +76,7 @@ export async function detectPlatesTiled(
   session: ort.InferenceSession,
   img: Decoded,
   opts: { mode?: ResizeMode; minConf?: number; size?: number; overlap?: number } = {},
-): Promise<PlateBox[]> {
+): Promise<PlateGroup[]> {
   const all = await detectPlates(session, img, opts);
   const frac = 0.5 + (opts.overlap ?? 0.25) / 2;
   const tw = Math.round(img.width * frac), th = Math.round(img.height * frac);
@@ -76,5 +89,5 @@ export async function detectPlatesTiled(
       }
     }
   }
-  return mergeBoxes(all);
+  return groupBoxes(all);
 }
