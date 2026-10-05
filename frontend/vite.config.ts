@@ -11,6 +11,8 @@ export default defineConfig({
   resolve: {
     alias: { "@": path.resolve(import.meta.dirname, "src") },
   },
+  // only scan the app entry for dependencies (public/ pages load their own libraries from a CDN)
+  optimizeDeps: { entries: ["index.html"] },
   test: { environment: "node", include: ["src/**/*.test.ts"] },
   server: {
     port: 5173,
