@@ -1,0 +1,20 @@
+{
+  "name": "anpr-backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "ocr:eval": "node scripts/ocr-eval.ts"
+  },
+  "dependencies": {
+    "onnxruntime-node": "^1.30.0",
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "typescript": "^7.0.2"
+  }
+}
