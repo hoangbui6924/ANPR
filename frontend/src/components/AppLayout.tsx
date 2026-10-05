@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
-import { BarChart3, FlaskConical, History, ListChecks, LogOut, Menu, ScanLine, Users, X } from "lucide-react";
+import { BarChart3, FlaskConical, History, KeyRound, ListChecks, LogOut, Menu, ScanLine, Users, X } from "lucide-react";
 import { USE_MOCK } from "@/api";
 import { Badge, Spinner } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
@@ -63,9 +63,16 @@ export function AppLayout() {
       <div className="border-t border-white/10 p-4">
         <p className="truncate text-sm font-medium text-white">{user.fullName}</p>
         <p className="text-xs text-sidebar-fg/70">{user.role === "admin" ? "Quản trị viên" : "Nhân viên"}</p>
+        <NavLink
+          to="/account"
+          onClick={() => setOpen(false)}
+          className="mt-3 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-white/5 hover:text-white"
+        >
+          <KeyRound className="size-4" /> Đổi mật khẩu
+        </NavLink>
         <button
           onClick={logout}
-          className="mt-3 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-white/5 hover:text-white"
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-white/5 hover:text-white"
         >
           <LogOut className="size-4" /> Đăng xuất
         </button>

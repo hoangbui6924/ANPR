@@ -5,6 +5,7 @@ import sharp from "sharp";
 import ort from "onnxruntime-node";
 import type { Decoded } from "./image.ts";
 import type { PlateBox } from "./detect.ts";
+import { warpQuad } from "./warp.ts";
 
 export interface OcrModel {
   session: ort.InferenceSession;
@@ -137,6 +138,8 @@ export interface Enhance {
   sharpen?: boolean;
   deskew?: boolean; // rotate so the text rows are horizontal
   upscale?: number; // enlarge (lanczos3 + unsharp mask) so each text row is at least this many px tall
+  /** use the 4 plate corners (pose model) to warp the plate upright instead of a box crop */
+  warp?: boolean;
 }
 
 type Rgb = { data: Buffer; width: number; height: number };
@@ -190,7 +193,8 @@ export async function enhance(c: Rgb, opt: Enhance, rowsCount = 1): Promise<Rgb>
 
 /** Read a detected plate: text per row + mean confidence */
 export async function readPlate(model: OcrModel, img: Decoded, box: PlateBox, opt: Enhance = {}, pad = 0.06) {
-  const c = await enhance(await crop(img, box, pad), opt, box.type === "2line" ? 2 : 1);
+  const raw = opt.warp && box.corners ? warpQuad(img, box.corners, pad) : await crop(img, box, pad);
+  const c = await enhance(raw, opt, box.type === "2line" ? 2 : 1);
   const lines = await plateRows(c, box.type);
   const parts = [];
   for (const l of lines) parts.push(await readLine(model, l.data, l.width, l.height));

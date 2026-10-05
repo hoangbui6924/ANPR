@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout, RequireAdmin } from "@/components/AppLayout";
 import { EmptyState, Spinner } from "@/components/ui";
+import { AccountPage } from "@/pages/Account";
 import { HistoryPage } from "@/pages/History";
 import { ListsPage } from "@/pages/Lists";
 import { LoginPage } from "@/pages/Login";
@@ -20,6 +21,7 @@ export function App() {
         <Route path="/recognize" element={<RecognizePage />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/lists" element={<ListsPage />} />
+        <Route path="/account" element={<AccountPage />} />
         <Route
           path="/stats"
           element={

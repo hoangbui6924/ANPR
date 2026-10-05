@@ -9,3 +9,4 @@ runs/
 *.pt
 Vietnam License Plate*
 __pycache__/
+.env

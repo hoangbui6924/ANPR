@@ -15,7 +15,8 @@ export type Vehicle = "car" | "motorbike";
 export function clean(raw: string): string {
   return raw
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[Đđ]/g, "D") // not decomposed by NFD
     .toUpperCase()
     .replace(/[^0-9A-Z]/g, "");
 }

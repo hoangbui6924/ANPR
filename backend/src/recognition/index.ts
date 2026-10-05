@@ -80,6 +80,10 @@ export async function readBest(ocr: OcrModel | OcrModel[], img: Decoded, box: Pl
 
 export interface RecognizerOptions {
   modelsDir: string;
+  /** plate detector; plate_pose.onnx (4 corners) is preferred when present */
+  detModel?: string;
+  /** with a pose model: "on" = read the perspective-corrected plate, "both" = box crop and warped plate vote together */
+  warp?: "off" | "on" | "both";
   ocrModel?: string; // PaddleOCR rec model (ONNX)
   ocrDict?: string;
   /** our plate OCR (training/train_plate_ocr.py); votes together with PaddleOCR. null = PaddleOCR only */
@@ -101,6 +105,8 @@ export interface RecognizerOptions {
 /** Defaults chosen with scripts/ocr-bench2.ts + scripts/small-bench.ts */
 export async function createRecognizer({
   modelsDir,
+  detModel = fs.existsSync(path.join(modelsDir, "plate_pose.onnx")) ? "plate_pose.onnx" : "plate.onnx",
+  warp = "both",
   ocrModel = "rec_ch_v4_server.onnx",
   ocrDict = "ppocr_keys_v1.txt",
   plateOcrModel = "plate_ocr_v2.onnx",
@@ -114,7 +120,7 @@ export async function createRecognizer({
   smallVariants = [],
   smallRowPx = 28,
 }: RecognizerOptions) {
-  const det = await ort.InferenceSession.create(path.join(modelsDir, "plate.onnx"));
+  const det = await ort.InferenceSession.create(path.join(modelsDir, detModel));
   const ocr: OcrModel[] = [];
   if (!plateOcrOnly) ocr.push(await loadOcr(path.join(modelsDir, ocrModel), path.join(modelsDir, ocrDict)));
   if (plateOcrModel && fs.existsSync(path.join(modelsDir, plateOcrModel))) ocr.push(await loadPlateOcr(path.join(modelsDir, plateOcrModel)));
@@ -134,7 +140,11 @@ export async function createRecognizer({
       let b = g.box;
       const sightings = g.members.slice(0, 2); // the two most confident sightings (full image / tile)
       const rowPx = (b.y2 - b.y1) / (b.type === "2line" ? 2 : 1);
-      const vs = rowPx < smallRowPx ? [...variants, ...smallVariants] : variants;
+      let vs = rowPx < smallRowPx ? [...variants, ...smallVariants] : variants;
+      if (b.corners && warp !== "off") {
+        const warped = vs.map((v) => ({ ...v, enhance: { ...v.enhance, warp: true } }));
+        vs = warp === "on" ? warped : [...warped, ...vs];
+      }
       let r = await readBest(ocr, img, sightings, vs);
       if (!r.valid) {
         // the detector sometimes swaps 1-line / 2-line on small plates: try reading it as the other type

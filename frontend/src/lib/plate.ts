@@ -7,7 +7,8 @@ export const PLATE_RE = /^(\d{2})([A-Z]{1,2}|[A-Z]\d)(\d{4,5})$/;
 export function normalizePlate(input: string): string {
   return input
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[Đđ]/g, "D") // not decomposed by NFD
     .toUpperCase()
     .replace(/[^0-9A-Z]/g, "");
 }

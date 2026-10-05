@@ -1,6 +1,7 @@
-# docs chapter 12. For development only the database runs in Docker:
-#   docker compose up -d db
-# The api + web services are added in step 8 (deployment).
+# docs chapter 12: the whole system with one command
+#   cp .env.example .env   (then set the passwords)
+#   docker compose up -d --build        -> http://localhost:8080
+# Development only needs the database:  docker compose up -d db
 services:
   db:
     image: postgres:16
@@ -16,5 +17,27 @@ services:
       interval: 5s
       retries: 10
 
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://anpr:${DB_PASSWORD:-anpr_dev}@db:5432/anpr
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET in .env}
+      CORS_ORIGIN: http://localhost:${WEB_PORT:-8080}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+    volumes: [uploads:/app/uploads]
+    depends_on:
+      db: { condition: service_healthy }
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    ports: ["${WEB_PORT:-8080}:80"]
+    depends_on: [api]
+
 volumes:
   pgdata:
+  uploads:

@@ -1,5 +1,9 @@
 node_modules/
 models/*.onnx
+# our own trained models are small enough to version
+!models/plate.onnx
+!models/plate_ocr_v2.onnx
+!models/plate_pose.onnx
 scripts/out/
 .env
 uploads/

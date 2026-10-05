@@ -24,6 +24,8 @@ const realApi = {
   login: (username: string, password: string) =>
     request<LoginResult>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   me: () => request<User>("/api/auth/me"),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<void>("/api/auth/password", { method: "PUT", body: JSON.stringify({ currentPassword, newPassword }) }),
 
   recognize: (file: File) => {
     const body = new FormData();

@@ -1,0 +1,12 @@
+node_modules
+uploads
+.env
+scripts
+tests
+models/zoo
+models/rec_ch_v4.onnx
+models/rec_en_v3.onnx
+models/en_dict.txt
+models/plate_ocr.onnx
+models/plate_ocr.json
+src/generated

@@ -40,7 +40,7 @@ def main():
 
     # final numbers on the re-split test set (all 5 sources)
     best = YOLO(str(ROOT / "runs" / "plate" / "weights" / "best.pt"))
-    m = best.val(data=str(ROOT / "datasets" / "vn-plate" / "data.yaml"), split="test", imgsz=640, device=0,
+    m = best.val(data=str(ROOT / "datasets" / "vn-plate" / "data.yaml"), split="test", imgsz=640, batch=args.batch, workers=args.workers, device=0,
                  project=str(ROOT / "runs"), name="plate_test", exist_ok=True)
     print(f"TEST  P={m.box.mp:.3f}  R={m.box.mr:.3f}  mAP50={m.box.map50:.3f}  mAP50-95={m.box.map:.3f}")
 

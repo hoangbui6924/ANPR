@@ -1,4 +1,6 @@
-// Plate detection with plate.onnx (YOLO11 exported with nms=True -> output [1, 300, 6]) (docs 6.2)
+// Plate detection (docs 6.2). Two exported model kinds, both with nms=True:
+//  - plate.onnx       (YOLO11 detect) -> [1, 300, 6]  x1 y1 x2 y2 conf cls
+//  - plate_pose.onnx  (YOLO11-pose)   -> [1, 300, 18] ... + 4 corners (x, y, visibility), docs 5.5
 import sharp from "sharp";
 import ort from "onnxruntime-node";
 import { toTensor, type Decoded, type ResizeMode } from "./image.ts";
@@ -12,6 +14,8 @@ export interface PlateBox {
   y2: number;
   conf: number;
   type: PlateType;
+  /** plate corners from the pose model: top-left, top-right, bottom-right, bottom-left */
+  corners?: [number, number][];
 }
 
 export async function detectPlates(
@@ -21,19 +25,18 @@ export async function detectPlates(
 ): Promise<PlateBox[]> {
   const { tensor, map } = await toTensor(img, size, mode);
   const out = await session.run({ [session.inputNames[0]]: tensor });
-  const d = out[session.outputNames[0]].data as Float32Array;
+  const o = out[session.outputNames[0]];
+  const d = o.data as Float32Array;
+  const stride = (o.dims as number[]).at(-1)!; // 6 (detect) or 18 (pose, 4 keypoints)
   const clamp = (v: number, max: number) => Math.min(Math.max(v, 0), max);
+  const mx = (v: number) => clamp((v - map.padX) / map.sx, img.width);
+  const my = (v: number) => clamp((v - map.padY) / map.sy, img.height);
   const plates: PlateBox[] = [];
-  for (let i = 0; i < d.length; i += 6) {
+  for (let i = 0; i < d.length; i += stride) {
     if (d[i + 4] < minConf) continue;
-    plates.push({
-      x1: clamp((d[i] - map.padX) / map.sx, img.width),
-      y1: clamp((d[i + 1] - map.padY) / map.sy, img.height),
-      x2: clamp((d[i + 2] - map.padX) / map.sx, img.width),
-      y2: clamp((d[i + 3] - map.padY) / map.sy, img.height),
-      conf: d[i + 4],
-      type: d[i + 5] === 0 ? "1line" : "2line",
-    });
+    const b: PlateBox = { x1: mx(d[i]), y1: my(d[i + 1]), x2: mx(d[i + 2]), y2: my(d[i + 3]), conf: d[i + 4], type: d[i + 5] === 0 ? "1line" : "2line" };
+    if (stride >= 18) b.corners = [0, 1, 2, 3].map((k) => [mx(d[i + 6 + k * 3]), my(d[i + 7 + k * 3])] as [number, number]);
+    plates.push(b);
   }
   return plates.sort((a, b) => b.conf - a.conf);
 }
@@ -85,7 +88,7 @@ export async function detectPlatesTiled(
     for (const y0 of [0, img.height - th]) {
       const data = await src.clone().extract({ left: x0, top: y0, width: tw, height: th }).raw().toBuffer();
       for (const b of await detectPlates(session, { data, width: tw, height: th }, opts)) {
-        all.push({ ...b, x1: b.x1 + x0, x2: b.x2 + x0, y1: b.y1 + y0, y2: b.y2 + y0 });
+        all.push({ ...b, x1: b.x1 + x0, x2: b.x2 + x0, y1: b.y1 + y0, y2: b.y2 + y0, corners: b.corners?.map(([x, y]) => [x + x0, y + y0] as [number, number]) });
       }
     }
   }

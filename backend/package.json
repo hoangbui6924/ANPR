@@ -15,11 +15,12 @@
     "db:seed": "tsx prisma/seed.ts",
     "postinstall": "prisma generate",
     "recognize": "node scripts/recognize.ts",
-    "ocr:bench": "node scripts/ocr-bench.ts"
+    "ocr:bench": "node scripts/ocr-bench.ts",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.10.0",
-    "@prisma/client": "^7.10.0",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^18.0.5",
@@ -30,7 +31,9 @@
     "multer": "^2.4.0",
     "onnxruntime-node": "^1.30.0",
     "pg": "^8.23.1",
+    "prisma": "7.10.0",
     "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -39,8 +42,9 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.3.0",
     "@types/node": "^26.6.4",
-    "prisma": "^7.10.0",
-    "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.3.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
   }
 }

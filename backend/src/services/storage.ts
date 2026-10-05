@@ -1,7 +1,8 @@
 // Files on local disk under uploads/ (docs 8.1: originals/, crops/). The DB only stores relative paths (docs 8.3).
 import fs from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import type { NextFunction, Request, Response } from "express";
 import sharp from "sharp";
 import { config } from "../config.ts";
 
@@ -12,7 +13,31 @@ export async function ensureDirs() {
   await fs.mkdir(path.join(config.uploadDir, "crops"), { recursive: true });
 }
 
-export const urlFor = (rel: string | null | undefined) => (rel ? `${UPLOAD_URL}/${rel.replace(/\\/g, "/")}` : null);
+// ---------- signed image URLs ----------
+// <img> tags cannot send the JWT, so image URLs carry an expiry + HMAC signature instead.
+// The expiry is rounded to the hour so the same image keeps the same URL (browser cache) for a while.
+const URL_TTL_S = 24 * 3600;
+
+function sign(rel: string, exp: number) {
+  return createHmac("sha256", config.jwtSecret).update(`${rel}:${exp}`).digest("base64url").slice(0, 32);
+}
+
+export function urlFor(rel: string | null | undefined) {
+  if (!rel) return null;
+  const path_ = rel.replace(/\\/g, "/");
+  const exp = Math.ceil((Date.now() / 1000 + URL_TTL_S) / 3600) * 3600;
+  return `${UPLOAD_URL}/${path_}?exp=${exp}&sig=${sign(path_, exp)}`;
+}
+
+/** Express middleware in front of the static /uploads handler */
+export function verifySignedUrl(req: Request, res: Response, next: NextFunction) {
+  const rel = decodeURIComponent(req.path.replace(/^\//, ""));
+  const exp = Number(req.query.exp), sig = String(req.query.sig ?? "");
+  const expected = Buffer.from(sign(rel, exp));
+  const ok = exp * 1000 > Date.now() && sig.length === expected.length && timingSafeEqual(Buffer.from(sig), expected);
+  if (!ok) return res.status(403).json({ message: "Liên kết ảnh không hợp lệ hoặc đã hết hạn" });
+  next();
+}
 
 /** Save the uploaded image (EXIF orientation applied, so boxes match what the browser shows) */
 export async function saveOriginal(buf: Buffer, mimetype: string) {

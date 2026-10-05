@@ -121,6 +121,12 @@ export const mockApi: Api = {
     return user;
   },
 
+  async changePassword(current, next) {
+    await wait(300);
+    if (!current) throw new Error("Mật khẩu hiện tại không đúng");
+    if (next.length < 8) throw new Error("Mật khẩu mới tối thiểu 8 ký tự");
+  },
+
   async recognize(file) {
     const started = performance.now();
     const { w, h } = await imageSize(file);
