@@ -132,7 +132,7 @@ export function HistoryPage() {
                   </Td>
                   <Td className="whitespace-nowrap text-fg-muted">{fmt.dateTime(d.createdAt)}</Td>
                   <Td>
-                    <Badge>{d.source === "webcam" ? "Webcam" : "Tải lên"}</Badge>
+                    <Badge>{d.source === "webcam" ? "Webcam" : d.source === "video" ? "Video" : "Tải lên"}</Badge>
                   </Td>
                   <Td className="text-fg-muted">{d.createdBy ?? "—"}</Td>
                   <Td className="whitespace-nowrap text-fg-muted">{fmt.ms(d.processMs)}</Td>

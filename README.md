@@ -1,6 +1,6 @@
 # ANPR – Website nhận dạng biển số xe máy và ô tô Việt Nam
 
-Website cho phép tải ảnh (một ảnh hoặc cả thư mục) để phát hiện và đọc biển số xe Việt Nam, lưu lịch sử, tìm kiếm biển số gần đúng, thống kê và cảnh báo xe trong danh sách đen.
+Website cho phép tải ảnh (một ảnh hoặc cả thư mục), tải video hoặc dùng webcam trực tiếp để phát hiện và đọc biển số xe Việt Nam, lưu lịch sử, tìm kiếm biển số gần đúng, thống kê và cảnh báo xe trong danh sách đen. Với video và webcam, khung biển số chạy theo từng xe và mỗi xe chỉ được lưu một lần.
 
 - **Phát hiện biển số:** YOLO12s-pose (khung + 4 góc biển để nắn phối cảnh) huấn luyện trên bộ dữ liệu Vietnam License Plate (Roboflow, 4.534 ảnh), chạy bằng ONNX Runtime ngay trong Node.js.
 - **Đọc ký tự:** PaddleOCR (PP-OCRv4 server, ONNX) kết hợp bỏ phiếu với một mô hình CRNN tự huấn luyện cho biển số độ phân giải thấp.
@@ -12,9 +12,11 @@ Quá trình xây dựng, các thử nghiệm và số liệu chi tiết: [docs/q
 
 | Hạng mục | Kết quả |
 |---|---|
-| Phát hiện biển số (tập test 455 ảnh) | Precision 0,988 · Recall 0,988 · mAP50 0,994 · mAP50-95 0,908 (4 góc: 0,992) |
-| Tốc độ (CPU) | khoảng 0,15–0,4 s/ảnh; ảnh lớn nhiều xe 1–2,5 s |
-| Biển nhỏ (chữ cao ~17 px) | đọc đúng 31/42 so với 21/42 ở cấu hình ban đầu |
+| Phát hiện biển số (tập test 455 ảnh) | Precision 0,990 · Recall 0,983 · mAP50 0,989 · mAP50-95 0,906 (4 góc: 0,989) |
+| Tốc độ (CPU) | khoảng 0,4–0,9 s/ảnh; ảnh lớn nhiều xe khoảng 2,7 s |
+| Biển nhỏ (chữ cao ~17 px) | đọc đúng 33/42 so với 21/42 ở cấu hình ban đầu |
+| Video (CPU) | phát hiện 8 khung/giây, đọc ký tự 5 khung tốt nhất mỗi xe; xử lý mất khoảng 1,5–2 lần độ dài video |
+| Camera trực tiếp (CPU) | 4,5–6,5 khung/giây, 120–210 ms/khung ở máy chủ; biển hiện sau khoảng 0,4 s, lưu sau khoảng 1 s |
 
 Độ chính xác toàn hệ thống chính thức được đo trên tập kiểm thử 200 ảnh có đáp án đã kiểm tra (xem phần [Kiểm thử](#kiểm-thử)).
 
@@ -26,7 +28,7 @@ ANPR/
 │   ├── models/         plate_pose.onnx, plate_ocr_v2.onnx, rec_ch_v4_server.onnx, ppocr_keys_v1.txt
 │   ├── scripts/        đánh giá, gán nhãn tự động, tạo tập kiểm thử, CLI nhận dạng
 │   └── tests/          Vitest + Supertest
-├── frontend/           React + Vite (trang nhận dạng, lịch sử, danh sách xe, thống kê, người dùng)
+├── frontend/           React + Vite (trang nhận dạng ảnh, video, camera, lịch sử, danh sách xe, thống kê, người dùng)
 ├── training/           script Python: chia dữ liệu, huấn luyện YOLO12 / YOLO12-pose / CRNN
 ├── datasets/           (không đưa lên git) dữ liệu đã chia lại, dữ liệu OCR, tập kiểm thử
 ├── docs/               tài liệu quá trình xây dựng
@@ -65,6 +67,8 @@ npm run dev                             # giao diện: http://localhost:5173
 Giao diện có chế độ dữ liệu mô phỏng (`VITE_USE_MOCK=true` trong `frontend/.env`) để chạy khi chưa có backend.
 
 Nhận dạng nhanh từ dòng lệnh: `node scripts/recognize.ts <ảnh hoặc thư mục>` (trong `backend/`).
+
+Nhận dạng video dùng ffmpeg từ gói `ffmpeg-static` (tự tải khi `npm install`, cả trên Windows lẫn trong Docker); muốn dùng ffmpeg khác thì đặt biến môi trường `FFMPEG_PATH`.
 
 ## Mô hình
 

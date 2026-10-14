@@ -27,4 +27,11 @@ export const config = {
   uploadDir: path.resolve(ROOT, env.UPLOAD_DIR),
   modelsDir: path.resolve(ROOT, env.MODELS_DIR),
   maxUploadBytes: 5 * 1024 * 1024, // docs 8.3: JPG/PNG, max 5 MB
+  video: {
+    maxBytes: 200 * 1024 * 1024,
+    maxSeconds: 5 * 60,
+    fps: 8, // frames analysed per second (detection ~120 ms/frame on CPU); the browser plays the video at full rate
+    maxSide: 1280, // frames are downscaled to this long side before detection / OCR
+    ffmpeg: process.env.FFMPEG_PATH, // default: the binary from the ffmpeg-static package
+  },
 } as const;

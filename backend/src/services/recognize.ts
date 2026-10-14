@@ -12,6 +12,11 @@ export async function initRecognizer() {
   recognizer = await createRecognizer({ modelsDir: config.modelsDir });
 }
 
+export function getRecognizer() {
+  if (!recognizer) throw new Error("Recognizer not initialised");
+  return recognizer;
+}
+
 export async function recognizeAndSave(buf: Buffer, mimetype: string, userId: number | null, source: "upload" | "webcam" = "upload") {
   if (!recognizer) throw new Error("Recognizer not initialised");
   const r = await recognizer(buf);

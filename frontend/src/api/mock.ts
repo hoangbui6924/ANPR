@@ -2,7 +2,7 @@
 // Every response has the same shape as the real endpoints in docs 8.2.
 import { formatPlate, normalizePlate } from "@/lib/plate";
 import type { Api, NewListEntry, NewUser } from "./index";
-import type { DailyStat, Detection, PlateResult, PlateType, User, VehicleListEntry } from "./types";
+import type { DailyStat, Detection, PlateResult, PlateType, User, VehicleListEntry, VideoJob } from "./types";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
@@ -75,6 +75,7 @@ function listMatch(norm: string) {
 }
 
 const detections: Detection[] = [];
+const videoJobs = new Map<string, VideoJob>();
 for (let i = 0; i < 64; i++) {
   const w = 960, h = 640;
   const type: PlateType = Math.random() < 0.6 ? "2line" : "1line";
@@ -154,6 +155,37 @@ export const mockApi: Api = {
     };
     detections.unshift(det);
     return { detectionId: det.id, imageUrl: det.imageUrl, processMs: det.processMs ?? 0, plates };
+  },
+
+  // video: the mock job "processes" for a few polls and finds nothing (no detector in the browser)
+  async uploadVideo() {
+    await wait(400);
+    const job: VideoJob = { id: `mock-${nextId++}`, status: "queued", progress: 0, duration: 0, width: 0, height: 0, error: null, processMs: null, totalTracks: 0, tracks: [] };
+    videoJobs.set(job.id, job);
+    return job;
+  },
+  async videoJob(id) {
+    await wait(150);
+    const job = videoJobs.get(id);
+    if (!job) throw new Error("Không tìm thấy video đang xử lý");
+    job.progress = Math.min(1, job.progress + 0.25);
+    job.status = job.progress >= 1 ? "done" : "processing";
+    if (job.status === "done") job.processMs ??= 2000;
+    return { ...job };
+  },
+
+  // live camera: the mock answers every frame with no plates (no detector in the browser)
+  async cameraStart() {
+    await wait(200);
+    return { id: `mock-cam-${nextId++}` };
+  },
+  async cameraFrame(_id, _jpeg, t) {
+    await wait(120);
+    return { t, ms: 120, boxes: [], saved: [] };
+  },
+  async cameraStop() {
+    await wait(100);
+    return { saved: [] };
   },
 
   async detections({ page = 1, pageSize = 10, q, from, to }) {

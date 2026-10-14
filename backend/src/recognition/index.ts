@@ -126,10 +126,43 @@ export async function createRecognizer({
   if (plateOcrModel && fs.existsSync(path.join(modelsDir, plateOcrModel))) ocr.push(await loadPlateOcr(path.join(modelsDir, plateOcrModel)));
   if (!ocr.length) throw new Error("no OCR model available");
 
-  return async function recognize(image: Buffer | string): Promise<{ plates: RecognizedPlate[]; width: number; height: number; ms: number }> {
+  const detOpts = { mode: resize, minConf: Math.min(minDetConf, lowDetConf) };
+
+  /**
+   * Read one plate from its sightings (most confident first); null = weak box that does not read as a plate.
+   * quick: one crop variant instead of all (live camera: each vehicle is read again on later frames anyway).
+   */
+  async function readPlateBoxes(img: Decoded, sightings: PlateBox[], { quick = false } = {}): Promise<RecognizedPlate | null> {
+    let b = sightings[0];
+    const rowPx = (b.y2 - b.y1) / (b.type === "2line" ? 2 : 1);
+    let vs = quick ? variants.slice(0, 1) : rowPx < smallRowPx ? [...variants, ...smallVariants] : variants;
+    if (b.corners && warp !== "off") {
+      const warped = vs.map((v) => ({ ...v, enhance: { ...v.enhance, warp: true } }));
+      vs = warp === "on" ? warped : [...warped, ...vs];
+    }
+    let r = await readBest(ocr, img, sightings, vs);
+    if (!r.valid) {
+      // the detector sometimes swaps 1-line / 2-line on small plates: try reading it as the other type
+      const flip = (x: PlateBox): PlateBox => ({ ...x, type: x.type === "1line" ? "2line" : "1line" });
+      const r2 = await readBest(ocr, img, sightings.map(flip), vs);
+      if (r2.valid) { r = r2; b = flip(b); }
+    }
+    if (b.conf < minDetConf && !r.valid) return null; // weak box that does not read as a plate: likely a false detection
+    return {
+      text: r.valid ? r.text : r.raw,
+      norm: r.norm,
+      type: b.type,
+      vehicle: r.vehicle,
+      detConf: +b.conf.toFixed(3),
+      ocrConf: +r.conf.toFixed(3),
+      valid: r.valid,
+      bbox: [b.x1, b.y1, b.x2, b.y2].map(Math.round) as RecognizedPlate["bbox"],
+    };
+  }
+
+  async function recognize(image: Buffer | string): Promise<{ plates: RecognizedPlate[]; width: number; height: number; ms: number }> {
     const t0 = performance.now();
     const img = await decode(image);
-    const detOpts = { mode: resize, minConf: Math.min(minDetConf, lowDetConf) };
     let groups: PlateGroup[] = (await detectPlates(det, img, detOpts)).map((b) => ({ box: b, members: [b] }));
     const large = Math.max(img.width, img.height) > tileAbovePx;
     if (tiles === "always" || (tiles === "auto" && (large || !groups.some((g) => g.box.conf >= minDetConf)))) {
@@ -137,35 +170,17 @@ export async function createRecognizer({
     }
     const plates: RecognizedPlate[] = [];
     for (const g of groups) {
-      let b = g.box;
-      const sightings = g.members.slice(0, 2); // the two most confident sightings (full image / tile)
-      const rowPx = (b.y2 - b.y1) / (b.type === "2line" ? 2 : 1);
-      let vs = rowPx < smallRowPx ? [...variants, ...smallVariants] : variants;
-      if (b.corners && warp !== "off") {
-        const warped = vs.map((v) => ({ ...v, enhance: { ...v.enhance, warp: true } }));
-        vs = warp === "on" ? warped : [...warped, ...vs];
-      }
-      let r = await readBest(ocr, img, sightings, vs);
-      if (!r.valid) {
-        // the detector sometimes swaps 1-line / 2-line on small plates: try reading it as the other type
-        const flip = (x: PlateBox): PlateBox => ({ ...x, type: x.type === "1line" ? "2line" : "1line" });
-        const r2 = await readBest(ocr, img, sightings.map(flip), vs);
-        if (r2.valid) { r = r2; b = flip(b); }
-      }
-      if (b.conf < minDetConf && !r.valid) continue; // weak box that does not read as a plate: likely a false detection
-      plates.push({
-        text: r.valid ? r.text : r.raw,
-        norm: r.norm,
-        type: b.type,
-        vehicle: r.vehicle,
-        detConf: +b.conf.toFixed(3),
-        ocrConf: +r.conf.toFixed(3),
-        valid: r.valid,
-        bbox: [b.x1, b.y1, b.x2, b.y2].map(Math.round) as RecognizedPlate["bbox"],
-      });
+      const p = await readPlateBoxes(img, g.members.slice(0, 2)); // the two most confident sightings (full image / tile)
+      if (p) plates.push(p);
     }
     return { plates, width: img.width, height: img.height, ms: Math.round(performance.now() - t0) };
-  };
+  }
+
+  // video frames reuse the same sessions: detect on a decoded frame, read a tracked plate
+  return Object.assign(recognize, {
+    detect: (img: Decoded) => detectPlates(det, img, detOpts),
+    readPlate: readPlateBoxes,
+  });
 }
 
 export type Recognizer = Awaited<ReturnType<typeof createRecognizer>>;

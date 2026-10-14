@@ -8,6 +8,8 @@ import { ListsPage } from "@/pages/Lists";
 import { LoginPage } from "@/pages/Login";
 import { RecognizePage } from "@/pages/Recognize";
 import { UsersPage } from "@/pages/Users";
+import { VideoPage } from "@/pages/Video";
+import { CameraPage } from "@/pages/Camera";
 
 // charts (recharts) are heavy: load the stats page on demand
 const StatsPage = lazy(() => import("@/pages/Stats").then((m) => ({ default: m.StatsPage })));
@@ -19,6 +21,8 @@ export function App() {
       <Route element={<AppLayout />}>
         <Route index element={<Navigate to="/recognize" replace />} />
         <Route path="/recognize" element={<RecognizePage />} />
+        <Route path="/video" element={<VideoPage />} />
+        <Route path="/camera" element={<CameraPage />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/lists" element={<ListsPage />} />
         <Route path="/account" element={<AccountPage />} />

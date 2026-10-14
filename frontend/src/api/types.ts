@@ -4,7 +4,7 @@ export type PlateType = "1line" | "2line";
 export type VehicleType = "car" | "motorbike";
 export type ListKind = "white" | "black";
 export type Role = "admin" | "staff";
-export type Source = "upload" | "webcam";
+export type Source = "upload" | "webcam" | "video";
 
 export interface ListMatch {
   kind: ListKind;
@@ -102,4 +102,51 @@ export interface LoginResult {
   accessToken: string;
   refreshToken: string;
   user: User;
+}
+
+/** One vehicle on a processed video: boxes are [t (s), x1, y1, x2, y2] with coordinates in 0..1 of the frame */
+export interface VideoTrack {
+  id: number;
+  start: number;
+  end: number;
+  boxes: [number, number, number, number, number][];
+  detectionId: number;
+  imageUrl: string;
+  plate: PlateResult;
+}
+
+export interface VideoJob {
+  id: string;
+  status: "queued" | "processing" | "done" | "error";
+  progress: number; // 0..1
+  duration: number; // seconds
+  width: number;
+  height: number;
+  error: string | null;
+  processMs: number | null;
+  totalTracks: number;
+  tracks: VideoTrack[]; // from the `since` index of the request on
+}
+
+/** A plate box on the live camera; `id` stays the same while the vehicle is in view */
+export interface LiveBox {
+  id: number;
+  box: [number, number, number, number]; // x1, y1, x2, y2 in 0..1 of the frame
+  text: string | null; // null until the first read
+  type: PlateType;
+  confirmed: boolean; // saved to history
+  black: boolean;
+}
+
+export interface SavedVehicle {
+  detectionId: number;
+  imageUrl: string;
+  plate: PlateResult;
+}
+
+export interface CameraFrameResult {
+  t: number; // capture time sent with the frame
+  ms: number; // server time for this frame
+  boxes: LiveBox[];
+  saved: SavedVehicle[]; // vehicles saved since the previous frame
 }

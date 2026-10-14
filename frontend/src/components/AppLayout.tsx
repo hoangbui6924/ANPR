@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
-import { BarChart3, FlaskConical, History, KeyRound, ListChecks, LogOut, Menu, ScanLine, Users, X } from "lucide-react";
+import { BarChart3, Camera, Film, FlaskConical, History, KeyRound, ListChecks, LogOut, Menu, ScanLine, Users, X } from "lucide-react";
 import { USE_MOCK } from "@/api";
 import { Badge, Spinner } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { to: "/recognize", label: "Nhận dạng", icon: ScanLine },
+  { to: "/video", label: "Video", icon: Film },
+  { to: "/camera", label: "Camera", icon: Camera },
   { to: "/history", label: "Lịch sử", icon: History },
   { to: "/lists", label: "Danh sách xe", icon: ListChecks },
   { to: "/stats", label: "Thống kê", icon: BarChart3 },

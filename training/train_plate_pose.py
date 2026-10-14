@@ -17,7 +17,7 @@ def main():
     ap.add_argument("--model", default="yolo12s-pose.yaml")
     ap.add_argument("--weights", default="yolo12s.pt", help="pretrained detector to transfer weights from ('' = train from scratch)")
     ap.add_argument("--epochs", type=int, default=100)
-    ap.add_argument("--batch", type=int, default=4, help="YOLO12 attention needs more VRAM than the old YOLO11 run (batch 6)")
+    ap.add_argument("--batch", type=int, default=4, help="small: YOLO12 attention needs more VRAM (6 GB GPU)")
     ap.add_argument("--workers", type=int, default=0, help="dataloader processes; each one loads torch+CUDA (~2-3 GB commit on Windows)")
     ap.add_argument("--resume", action="store_true")
     args = ap.parse_args()

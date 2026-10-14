@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Loader2, RotateCcw, ScanSearch, ShieldAlert, Timer } from "lucide-react";
 import { api } from "@/api";
@@ -21,6 +22,7 @@ interface Item {
 
 export function RecognizePage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [items, setItems] = useState<Item[]>([]);
   const [index, setIndex] = useState(0);
   const [active, setActive] = useState<number | null>(0);
@@ -115,7 +117,7 @@ export function RecognizePage() {
         title="Nhận dạng biển số"
         description="Tải ảnh hoặc cả thư mục ảnh xe máy, ô tô để phát hiện và đọc biển số."
         action={
-          <Button variant="secondary" disabled title="Tính năng nâng cao (chương 10)">
+          <Button variant="secondary" onClick={() => navigate("/camera")}>
             <Camera className="size-4" /> Webcam realtime
           </Button>
         }

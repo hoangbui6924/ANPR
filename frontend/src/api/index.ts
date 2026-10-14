@@ -3,6 +3,7 @@
 import { request, toQuery, USE_MOCK } from "./client";
 import { mockApi } from "./mock";
 import type {
+  CameraFrameResult,
   DailyStat,
   Detection,
   DetectionQuery,
@@ -12,9 +13,11 @@ import type {
   PlateSearchHit,
   RecognizeResult,
   Role,
+  SavedVehicle,
   StatsSummary,
   User,
   VehicleListEntry,
+  VideoJob,
 } from "./types";
 
 export type NewListEntry = { plateText: string; kind: ListKind; note?: string };
@@ -32,6 +35,18 @@ const realApi = {
     body.append("image", file);
     return request<RecognizeResult>("/api/recognize", { method: "POST", body });
   },
+
+  uploadVideo: (file: File) => {
+    const body = new FormData();
+    body.append("video", file);
+    return request<VideoJob>("/api/videos", { method: "POST", body });
+  },
+  videoJob: (id: string, since = 0) => request<VideoJob>(`/api/videos/${id}${toQuery({ since })}`),
+
+  cameraStart: () => request<{ id: string }>("/api/camera", { method: "POST" }),
+  cameraFrame: (id: string, jpeg: Blob, t: number) =>
+    request<CameraFrameResult>(`/api/camera/${id}/frames`, { method: "POST", body: jpeg, headers: { "Content-Type": "image/jpeg", "X-Frame-Time": String(t) } }),
+  cameraStop: (id: string) => request<{ saved: SavedVehicle[] }>(`/api/camera/${id}`, { method: "DELETE" }),
 
   detections: (q: DetectionQuery) => request<Paged<Detection>>(`/api/detections${toQuery(q)}`),
   detection: (id: number) => request<Detection>(`/api/detections/${id}`),

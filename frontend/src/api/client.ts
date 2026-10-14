@@ -53,7 +53,7 @@ async function refreshAccessToken(): Promise<boolean> {
 export async function request<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
   const headers = new Headers(init.headers);
   if (tokens.access) headers.set("Authorization", `Bearer ${tokens.access}`);
-  if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
+  if (typeof init.body === "string" && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
 
   const res = await fetch(path, { ...init, headers });
   if (res.status === 401 && retry && (await refreshAccessToken())) {

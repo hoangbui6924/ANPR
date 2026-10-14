@@ -13,6 +13,8 @@ import { platesRouter } from "./routes/plates.ts";
 import { listsRouter } from "./routes/lists.ts";
 import { statsRouter } from "./routes/stats.ts";
 import { usersRouter } from "./routes/users.ts";
+import { videosRouter } from "./routes/videos.ts";
+import { cameraRouter } from "./routes/camera.ts";
 import { UPLOAD_URL, verifySignedUrl } from "./services/storage.ts";
 
 export function createApp() {
@@ -22,7 +24,9 @@ export function createApp() {
   app.use(helmet({ crossOriginResourcePolicy: { policy: "same-site" } }));
   app.use(cors({ origin: config.corsOrigin }));
   app.use(express.json({ limit: "100kb" }));
-  app.use("/api", rateLimit({ windowMs: 15 * 60 * 1000, limit: 1000, standardHeaders: true, legacyHeaders: false }));
+  // live camera frames (~7/s, authenticated) would use up the limit in minutes: they are not counted
+  const cameraFrame = (req: express.Request) => req.method === "POST" && /^\/camera\/[^/]+\/frames$/.test(req.path);
+  app.use("/api", rateLimit({ windowMs: 15 * 60 * 1000, limit: 1000, standardHeaders: true, legacyHeaders: false, skip: cameraFrame }));
 
   // uploaded images: random UUID names (docs 8.3) + signed, expiring URLs
   app.use(UPLOAD_URL, verifySignedUrl, express.static(config.uploadDir, { fallthrough: false, maxAge: "1h" }));
@@ -30,6 +34,8 @@ export function createApp() {
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
   app.use("/api/auth", authRouter);
   app.use("/api/recognize", requireAuth, recognizeRouter);
+  app.use("/api/videos", requireAuth, videosRouter);
+  app.use("/api/camera", requireAuth, cameraRouter);
   app.use("/api/detections", requireAuth, detectionsRouter);
   app.use("/api/plates", requireAuth, platesRouter);
   app.use("/api/vehicle-lists", requireAuth, listsRouter);

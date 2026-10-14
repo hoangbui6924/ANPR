@@ -11,6 +11,9 @@ export const UPLOAD_URL = "/uploads";
 export async function ensureDirs() {
   await fs.mkdir(path.join(config.uploadDir, "originals"), { recursive: true });
   await fs.mkdir(path.join(config.uploadDir, "crops"), { recursive: true });
+  // videos being processed; anything left there is from a job cut off by a restart
+  await fs.rm(path.join(config.uploadDir, "tmp"), { recursive: true, force: true });
+  await fs.mkdir(path.join(config.uploadDir, "tmp"), { recursive: true });
 }
 
 // ---------- signed image URLs ----------

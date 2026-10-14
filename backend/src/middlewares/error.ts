@@ -19,7 +19,7 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     return res.status(400).json({ message: "Dữ liệu không hợp lệ", issues: err.issues.map((i) => ({ path: i.path.join("."), message: i.message })) });
   }
   if (err instanceof multer.MulterError) {
-    return res.status(400).json({ message: err.code === "LIMIT_FILE_SIZE" ? "Ảnh lớn hơn 5 MB" : err.message });
+    return res.status(400).json({ message: err.code === "LIMIT_FILE_SIZE" ? (err.field === "video" ? "Video lớn hơn 200 MB" : "Ảnh lớn hơn 5 MB") : err.message });
   }
   // Prisma unique constraint
   if (typeof err === "object" && err && (err as { code?: string }).code === "P2002") {

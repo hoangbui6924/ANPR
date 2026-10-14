@@ -57,45 +57,45 @@ Sau khi chia, nhãn được vẽ lại lên 24 ảnh ngẫu nhiên của tập 
 
 ### 3.1 Cấu hình
 
-Mô hình phát hiện biển số dùng YOLO12s (bản "small", cân bằng giữa tốc độ và độ chính xác), huấn luyện với ảnh 640×640, tối đa 100 epoch, cơ chế dừng sớm sau 20 epoch không cải thiện (patience 20), seed 42.
+Mô hình phát hiện biển số là YOLO12s-pose (bản "small", cân bằng giữa tốc độ và độ chính xác): ngoài khung bao và loại biển (một dòng / hai dòng), mô hình còn dự đoán bốn góc của biển để nắn phối cảnh (mục 5.8). Ultralytics chỉ phát hành trọng số huấn luyện sẵn của YOLO12 cho bài toán phát hiện, không có bản pose, nên mô hình được dựng từ tệp cấu hình `yolo12s-pose.yaml` rồi nạp trọng số của `yolo12s.pt` cho các lớp trùng khớp (691/733 tham số; phần đầu dự đoán bốn góc học từ đầu). Mô hình có 9,5 triệu tham số.
 
-Lần chạy đầu với batch 16 bị lỗi hết bộ nhớ GPU ngay ở bước đánh giá cuối epoch đầu tiên: khi huấn luyện, GPU dùng khoảng 3,95 GB, nhưng bước đánh giá của Ultralytics dùng batch gấp đôi, cộng với phần bộ nhớ hệ điều hành đang chiếm, nên vượt quá 6 GB. Theo đúng phương án dự phòng trong kế hoạch, batch được giảm xuống 8 và số luồng nạp dữ liệu giảm xuống 2. Lần chạy thứ hai diễn ra ổn định.
+Huấn luyện với ảnh 640×640, tối đa 100 epoch, cơ chế dừng sớm sau 20 epoch không cải thiện (patience 20), seed 42. Máy chỉ có GPU 6 GB: bước đánh giá cuối mỗi epoch của Ultralytics mặc định dùng batch gấp đôi, và khối attention của YOLO12 tốn bộ nhớ GPU hơn các thế hệ YOLO dùng tích chập thuần, nên chọn batch 4 cho cả huấn luyện lẫn đánh giá. Không dùng tiến trình nạp dữ liệu phụ (workers 0), vì trên Windows mỗi tiến trình như vậy nạp lại toàn bộ PyTorch và CUDA, dễ làm cạn bộ nhớ hệ thống.
 
 ### 3.2 Quá trình huấn luyện
 
-Mỗi epoch mất khoảng 52 giây (bao gồm cả bước đánh giá trên tập valid). Mô hình hội tụ nhanh: sau 10 epoch, mAP50 trên tập valid đã đạt 0,989.
+Mô hình hội tụ nhanh: sau 10 epoch, mAP50 trên tập valid đã đạt 0,988; phần còn lại chủ yếu cải thiện độ khít của khung (mAP50-95).
 
-| Epoch | Precision | Recall | mAP50 | mAP50-95 |
-|---|---|---|---|---|
-| 1 | 0,858 | 0,906 | 0,901 | 0,705 |
-| 5 | 0,943 | 0,943 | 0,978 | 0,815 |
-| 10 | 0,985 | 0,983 | 0,989 | 0,845 |
-| 46 | — | — | 0,992 | 0,887 |
-| 65 (tốt nhất) | 0,988 | 0,985 | 0,993 | 0,901 |
+| Epoch | Precision | Recall | mAP50 | mAP50-95 khung | mAP50-95 bốn góc |
+|---|---|---|---|---|---|
+| 1 | 0,676 | 0,751 | 0,637 | 0,447 | 0,559 |
+| 5 | 0,944 | 0,906 | 0,966 | 0,783 | 0,944 |
+| 10 | 0,977 | 0,959 | 0,988 | 0,833 | 0,972 |
+| 50 | 0,971 | 0,979 | 0,993 | 0,880 | 0,988 |
+| 97 (tốt nhất) | 0,986 | 0,985 | 0,994 | 0,897 | 0,991 |
 
-Quá trình huấn luyện tự dừng ở epoch 85 vì 20 epoch liên tiếp không cải thiện; mô hình tốt nhất được lưu ở epoch 65. Tổng thời gian huấn luyện là 1,24 giờ.
+Mô hình chạy đủ 100 epoch (chưa lần nào 20 epoch liên tiếp không cải thiện), mô hình tốt nhất được lưu ở epoch 97. Tổng thời gian huấn luyện là 4,45 giờ, khoảng 2,5–6 phút mỗi epoch. Nút thắt là phần đọc và tăng cường ảnh trên CPU (do không dùng tiến trình nạp dữ liệu phụ): GPU chỉ được sử dụng khoảng 30% và dùng khoảng 3 GB bộ nhớ.
 
 ### 3.3 Kết quả trên tập test
 
-Mô hình tốt nhất được đánh giá trên tập test mới (455 ảnh, đủ năm nguồn, không tham gia huấn luyện):
+Mô hình tốt nhất được đánh giá trên tập test (455 ảnh, đủ năm nguồn, không tham gia huấn luyện):
 
-| Lớp | Số biển | Precision | Recall | mAP50 | mAP50-95 |
-|---|---|---|---|---|---|
-| Tất cả | 513 | 0,987 | 0,989 | 0,992 | 0,904 |
-| Biển một dòng | 153 | 0,989 | 1,000 | 0,995 | 0,896 |
-| Biển hai dòng | 360 | 0,985 | 0,978 | 0,990 | 0,912 |
+| Lớp | Số biển | Precision | Recall | mAP50 | mAP50-95 khung | mAP50-95 bốn góc |
+|---|---|---|---|---|---|---|
+| Tất cả | 513 | 0,990 | 0,983 | 0,989 | 0,906 | 0,989 |
+| Biển một dòng | 153 | 0,991 | 1,000 | 0,995 | 0,900 | 0,994 |
+| Biển hai dòng | 360 | 0,989 | 0,966 | 0,984 | 0,913 | 0,983 |
 
-Kết quả trên tập test sát với tập valid (mAP50-95 0,904 so với 0,901), cho thấy mô hình không bị quá khớp. Tốc độ suy luận khoảng 6 ms mỗi ảnh trên GPU.
+Kết quả trên tập test sát với tập valid (mAP50-95 0,906 so với 0,897), cho thấy mô hình không bị quá khớp. Tốc độ suy luận khoảng 9 ms mỗi ảnh trên GPU; trong Node.js trên CPU, riêng bước phát hiện mất khoảng 120 ms cho một ảnh 1566×853.
 
 ### 3.4 Xuất sang ONNX
 
 Mô hình được xuất sang định dạng ONNX kèm bước lọc khung trùng (NMS) bên trong, để phần mã Node.js không phải tự cài đặt NMS:
 
 ```
-yolo export model=runs/plate/weights/best.pt format=onnx imgsz=640 nms=True
+yolo export model=runs/plate_pose/weights/best.pt format=onnx imgsz=640 nms=True
 ```
 
-Đầu ra của mô hình có dạng `[1, 300, 6]`, mỗi dòng gồm tọa độ góc trên trái và góc dưới phải, độ tin cậy và lớp.
+Đầu ra của mô hình có dạng `[1, 300, 18]`, mỗi dòng gồm tọa độ góc trên trái và góc dưới phải của khung, độ tin cậy, lớp, rồi tọa độ và độ hiện diện của bốn góc biển.
 
 ---
 
@@ -262,17 +262,11 @@ Kết quả: ảnh đường phố trên được nhận đủ 5 biển và đ�
 
 ### 5.8 Mô hình bốn góc (YOLO12-pose) và nắn phối cảnh
 
-Biển chụp xéo là nhóm lỗi lớn còn lại, vì khung chữ nhật của biển bị méo thành hình thang chứa nhiều nền và chữ bị nghiêng. Theo phương án nâng cấp trong kế hoạch, nhóm huấn luyện thêm một mô hình YOLO12s-pose, ngoài khung bao còn dự đoán bốn góc của biển, tận dụng nhãn đa giác bốn góc sẵn có của bộ dữ liệu.
+Biển chụp xéo là nhóm lỗi lớn còn lại, vì khung chữ nhật của biển bị méo thành hình thang chứa nhiều nền và chữ bị nghiêng. Theo phương án nâng cấp trong kế hoạch, mô hình phát hiện là YOLO12s-pose (mục 3): ngoài khung bao còn dự đoán bốn góc của biển, tận dụng nhãn đa giác bốn góc sẵn có của bộ dữ liệu.
 
 **Chuẩn bị dữ liệu.** Nhãn đa giác được chuyển sang định dạng pose của YOLO: khung bao kèm bốn điểm góc theo thứ tự trên trái, trên phải, dưới phải, dưới trái. Với 51 đa giác có 6–7 điểm, bốn góc được chọn bằng quy tắc điểm cực trị (góc trên trái có tổng x + y nhỏ nhất, góc dưới phải có tổng lớn nhất, góc trên phải có hiệu x − y lớn nhất, góc dưới trái có hiệu nhỏ nhất). Khi lật ảnh ngang để tăng cường dữ liệu, các góc trái và phải được hoán đổi tương ứng.
 
-**Huấn luyện.** Ultralytics chỉ phát hành trọng số huấn luyện sẵn của YOLO12 cho bài toán phát hiện, không có bản pose. Vì vậy mô hình được dựng từ tệp cấu hình `yolo12s-pose.yaml`, rồi nạp trọng số của `yolo12s.pt` cho các lớp trùng khớp (691/733 tham số; phần đầu dự đoán bốn góc học từ đầu). Mô hình huấn luyện 100 epoch trên ảnh 640×640, mất 4,45 giờ. Máy chỉ có GPU 6 GB và bộ nhớ hệ thống hạn chế: mỗi tiến trình nạp dữ liệu trên Windows nạp lại toàn bộ PyTorch và CUDA, dễ gây thiếu RAM, nên huấn luyện không dùng tiến trình nạp dữ liệu phụ; khối attention của YOLO12 tốn bộ nhớ GPU hơn nên dùng batch 4. Với cấu hình này, phần nạp và tăng cường ảnh trên CPU là nút thắt về thời gian (GPU chỉ sử dụng khoảng 30%).
-
-| Mô hình (tập test 455 ảnh) | Precision | Recall | mAP50 | mAP50-95 khung | mAP50-95 bốn góc |
-|---|---|---|---|---|---|
-| YOLO12s-pose | 0,990 | 0,983 | 0,989 | 0,906 | 0,989 |
-
-Mô hình phát hiện biển với độ chính xác cao, đồng thời xác định bốn góc gần như chính xác tuyệt đối.
+**Huấn luyện.** Cấu hình, quá trình huấn luyện và kết quả trên tập test được trình bày ở mục 3. Trên tập test, mô hình xác định bốn góc biển gần như chính xác tuyệt đối (mAP50-95 bốn góc 0,989).
 
 **Nắn phối cảnh.** Từ bốn góc, hệ thống tính ma trận biến đổi phối cảnh (homography, giải hệ tám phương trình tuyến tính) ánh xạ hình chữ nhật đích về tứ giác của biển trên ảnh gốc, rồi lấy mẫu lại từng điểm ảnh bằng nội suy song tuyến. Kích thước ảnh đích lấy theo cặp cạnh đối dài hơn của tứ giác, kèm một lề nhỏ quanh biển. Kết quả là một ảnh biển thẳng, đúng tỷ lệ, được đưa vào bước tách dòng và OCR như trước.
 
@@ -319,7 +313,7 @@ Máy chủ API chạy ở cổng 3001 thay vì 3000 như kế hoạch, vì cổn
 
 Một kịch bản kiểm thử tự động gọi toàn bộ API với ảnh thật và kiểm tra 33 tình huống: đăng nhập đúng và sai, làm mới token, nhận dạng biển một dòng và hai dòng, từ chối tệp không phải ảnh, lịch sử có phân trang và lọc theo ngày, tìm kiếm gần đúng, thêm biển vào danh sách đen và nhận cảnh báo khi nhận dạng lại, thống kê, tạo người dùng, kiểm tra phân quyền (staff không xem được danh sách người dùng, không xóa được dữ liệu), không cho admin tự khóa tài khoản của mình, tài khoản bị khóa không đăng nhập được, và xóa một lần nhận dạng kèm tệp ảnh. Lần chạy đầu phát hiện một lỗi (ảnh đã xóa trả về mã 500 thay vì 404); sau khi sửa, cả 33 tình huống đều đạt.
 
-Sau đó các phép kiểm thử được đưa vào dự án dưới dạng kiểm thử tự động. Phía backend dùng Vitest và Supertest: kiểm thử đơn vị cho hậu xử lý biển số (sửa ký tự dễ nhầm, kiểm tra định dạng, biển hai dòng), cho bước tách dòng và gom khung; kiểm thử nhận dạng thật trên hai ảnh mẫu (biển một dòng và hai dòng); và kiểm thử API với tài khoản thử nghiệm tự tạo rồi tự dọn (xác thực, phân quyền, kiểm tra dữ liệu đầu vào, danh sách đen, nhận dạng, đường dẫn ảnh có chữ ký, tìm kiếm gần đúng, thống kê, đổi mật khẩu). Phía frontend dùng Vitest cho các hàm chuẩn hóa và định dạng biển số. Toàn bộ 35 phép kiểm thử đều đạt. Bộ kiểm thử đã phát hiện một lỗi thật: chữ "Đ" không được chuẩn hóa thành "D" vì Unicode không tách được dấu của chữ này.
+Sau đó các phép kiểm thử được đưa vào dự án dưới dạng kiểm thử tự động. Phía backend dùng Vitest và Supertest: kiểm thử đơn vị cho hậu xử lý biển số (sửa ký tự dễ nhầm, kiểm tra định dạng, biển hai dòng), cho bước tách dòng và gom khung; kiểm thử nhận dạng thật trên hai ảnh mẫu (biển một dòng và hai dòng); và kiểm thử API với tài khoản thử nghiệm tự tạo rồi tự dọn (xác thực, phân quyền, kiểm tra dữ liệu đầu vào, danh sách đen, nhận dạng, đường dẫn ảnh có chữ ký, tìm kiếm gần đúng, thống kê, đổi mật khẩu). Phía frontend dùng Vitest cho các hàm chuẩn hóa và định dạng biển số. Khi thêm nhận dạng từ video (mục 8), bộ kiểm thử có thêm phần theo dõi biển qua các khung hình (backend) và phần nội suy vị trí khung khi phát video (frontend). Phần camera trực tiếp (mục 9) có thêm kiểm thử phiên camera với bộ phát hiện và OCR giả (lưu một lần mỗi xe, xác nhận bằng hai lần đọc trùng nhau, không lưu lại biển vừa lưu, không lưu vật không đọc ra biển hợp lệ) và phần dự đoán vị trí khung. Bỏ phiếu theo từng ký tự cũng có kiểm thử riêng. Toàn bộ 58 phép kiểm thử (44 backend, 14 frontend) đều đạt. Bộ kiểm thử đã phát hiện một lỗi thật: chữ "Đ" không được chuẩn hóa thành "D" vì Unicode không tách được dấu của chữ này.
 
 ### 6.4 Đóng gói bằng Docker Compose
 
@@ -333,7 +327,7 @@ Toàn hệ thống được đóng gói thành ba dịch vụ: cơ sở dữ li�
 
 ## 7. Giao diện web
 
-Giao diện được xây dựng bằng React 19, Vite, TypeScript và TailwindCSS, gồm sáu trang theo kế hoạch: đăng nhập, nhận dạng, lịch sử, danh sách xe, thống kê và người dùng (chỉ admin). Thư viện TanStack Query quản lý việc gọi API và bộ nhớ đệm; Recharts vẽ biểu đồ thống kê. Giao diện hỗ trợ chế độ sáng, tối và màn hình điện thoại.
+Giao diện được xây dựng bằng React 19, Vite, TypeScript và TailwindCSS, gồm sáu trang theo kế hoạch: đăng nhập, nhận dạng, lịch sử, danh sách xe, thống kê và người dùng (chỉ admin), cùng hai trang được thêm sau: nhận dạng từ video (mục 8) và camera trực tiếp (mục 9). Thư viện TanStack Query quản lý việc gọi API và bộ nhớ đệm; Recharts vẽ biểu đồ thống kê. Giao diện hỗ trợ chế độ sáng, tối và màn hình điện thoại.
 
 Trang nhận dạng cho phép tải một ảnh hoặc kéo thả cả một thư mục ảnh. Khi tải thư mục, các tệp JPG/PNG hợp lệ được sắp theo tên và nhận dạng lần lượt, có thanh tiến độ; người dùng chuyển ảnh bằng nút trái/phải, phím mũi tên hoặc dải ảnh thu nhỏ có đánh dấu trạng thái từng ảnh. Kết quả hiển thị khung biển trên ảnh (màu khác nhau cho biển một dòng, hai dòng và biển thuộc danh sách đen), ảnh cắt biển, chuỗi biển số trình bày giống biển thật, loại xe, độ tin cậy phát hiện và đọc ký tự, cùng nhãn "Hợp lệ" hoặc "Cần kiểm tra". Biển thuộc danh sách đen có cảnh báo nổi bật kèm biểu tượng, không chỉ dựa vào màu sắc.
 
@@ -341,12 +335,60 @@ Trong giai đoạn chưa có backend, giao diện chạy với một bộ dữ l
 
 ---
 
-## 8. Những điểm khác với kế hoạch ban đầu
+## 8. Nhận dạng từ video
+
+Ngoài ảnh, hệ thống nhận dạng biển số trong video tải lên (MP4, WebM, MOV, MKV, AVI; tối đa 200 MB và 5 phút). Yêu cầu đặt ra là: video phát đúng tốc độ, khung biển số chạy liên tục theo từng xe trong suốt thời gian xe xuất hiện, và mỗi xe chỉ được lưu một lần với khung hình rõ nhất, không bị tách thành nhiều ảnh.
+
+**Tách ba việc chạy ở ba tốc độ.** Đọc ký tự là bước chậm (khoảng 0,5–1 giây mỗi biển trên CPU) nên không thể chạy cho mọi khung hình; ngược lại, riêng bước phát hiện chỉ mất khoảng 120 ms mỗi khung. Vì vậy:
+
+- Trình duyệt tự phát tệp video gốc ở tốc độ bình thường, nên việc nhận dạng không bao giờ làm video chậm lại.
+- Backend dùng ffmpeg (gói `ffmpeg-static`, chạy được cả trên Windows lẫn trong Docker) lấy khoảng 8 khung hình mỗi giây (khung đầu tiên trong mỗi khoảng 1/8 giây), thu nhỏ về cạnh dài tối đa 1280 điểm ảnh, rồi chạy mô hình phát hiện trên từng khung. Thời điểm của mỗi khung được lấy từ chính dấu thời gian trong video (bộ lọc `showinfo`), không suy ra từ số thứ tự khung, để khung biển vẽ ra khớp với hình đang phát. Video quay bằng điện thoại có cờ xoay được ffmpeg và trình duyệt xoay giống nhau.
+- Các khung biển ở những khung hình liên tiếp được nối thành **một đường đi cho mỗi xe** (tracking): khung mới thuộc về xe có vị trí dự đoán (khung trước dịch theo vận tốc của hai lần thấy gần nhất) chồng lên nó nhiều nhất, hoặc nằm đủ gần nếu xe chạy nhanh; xe không được thấy quá 1 giây thì coi là đã ra khỏi khung hình.
+- Khi một xe ra khỏi khung hình, bước đọc ký tự chỉ chạy trên 5 khung hình tốt nhất của xe đó (biển to và độ tin cậy cao nhất), rồi bỏ phiếu chọn chuỗi biển số xuất hiện nhiều nhất. Nếu không chuỗi nào được đọc ra từ hai lần trở lên nhưng có từ ba lần đọc cùng độ dài, các lần đọc bỏ phiếu theo từng ký tự (ví dụ `29C200980`, `29C200560`, `29D200560` cho `29C200560`), với điều kiện ở mọi vị trí có một ký tự thắng rõ ràng và được ít nhất hai lần đọc ủng hộ. Xe có từ ba lần đọc hợp lệ mà vẫn không thống nhất được thì không lưu, vì biển quá nhỏ hoặc mờ để tin được.
+
+**Lưu kết quả.** Mỗi xe được lưu thành một lần nhận dạng (nguồn "video") kèm khung hình rõ nhất và ảnh cắt biển, nên trang Lịch sử và Thống kê dùng lại được mà không phải đổi lược đồ cơ sở dữ liệu. Nếu cùng một biển bị mất dấu rồi xuất hiện lại trong vòng 3 giây, hai đoạn được gộp thành một xe. Tệp video gốc chỉ được giữ trong lúc xử lý rồi xóa. Ba luật lọc nhiễu: đường đi ngắn hơn 3 khung hình bị bỏ; xe chưa từng có khung đạt độ tin cậy 0,4 (cùng ngưỡng với ảnh) bị bỏ trừ khi được thấy liên tục ít nhất 2 giây; và khác với ảnh tĩnh, xe mà không lần đọc nào ra biển số đúng định dạng Việt Nam cũng bị bỏ, vì với nhiều khung hình để đọc, trường hợp này gần như luôn là vật khác giống biển số (vạch kẻ đường, chữ dán trên kính).
+
+**Hiển thị.** Video được xử lý dưới nền; trang web hỏi tiến độ mỗi 1,5 giây và nhận dần các xe đã xử lý xong, nên người dùng xem được video ngay trong lúc chờ. Một lớp canvas nằm trên video vẽ lại khung biển ở mỗi lần màn hình làm tươi, theo thời điểm đang phát: giữa hai mẫu của backend (cách nhau 1/8 giây), vị trí khung được nội suy tuyến tính nên khung trượt mượt theo xe thay vì nhảy từng nấc. Nhờ có sẵn toàn bộ đường đi, tua, tạm dừng hay phát lại đều khớp. Bấm vào một xe trong danh sách sẽ tua video tới lúc xe đó xuất hiện.
+
+**Thử nghiệm.** Video thử được tạo từ ảnh đường phố ở mục 5.7 bằng cách cho khung hình 1280×696 lia dần qua ảnh trong 10 giây, nên các biển di chuyển trong khung hình và một biển chỉ đi vào khung từ giây thứ 5. Ở lần chạy đầu (3 khung hình đọc ký tự mỗi xe, chưa có luật độ tin cậy), hệ thống tìm được 6 xe: 3 biển đúng, 1 biển sai một ký tự (14G-147.59 thay vì 14C-147.59) và 2 "xe" có độ tin cậy phát hiện chỉ 0,30–0,34 đọc ra chuỗi sai. Sau khi tăng lên 5 khung hình mỗi xe và thêm luật độ tin cậy, kết quả là 4 xe, đọc đúng cả 4 biển (30E-220.70, 14C-147.59, 29V-7427, 30F-748.46), xử lý hết khoảng 18–25 giây trên CPU cho 10 giây video. Kiểm thử bằng trình duyệt xác nhận video phát đúng tốc độ gốc, khung biển bám theo xe và bấm vào xe thì tua đúng thời điểm, cả khi chạy phát triển lẫn khi chạy trong Docker.
+
+**Thử trên video quay thực tế.** Video thứ hai là một đoạn quay bằng điện thoại từ trên cao, dài 19 giây, 888×576 điểm ảnh sau khi xoay (tệp gốc lưu dọc, có cờ xoay 90°), 29,95 khung hình/giây: một ô tô biển hai dòng 56P-5644 đi vào rồi dừng, sau đó bốn xe máy lần lượt đi qua. Lần chạy đầu phát hiện hai lỗi mà video dựng từ ảnh tĩnh không bộc lộ:
+
+- Một vạch kẻ đường màu trắng bị nhận là biển số (độ tin cậy phát hiện 0,66, thấy liên tục 6 giây, đọc ra chuỗi không hợp lệ "1 71156"). Luật bỏ xe không đọc ra biển hợp lệ ở trên được thêm vào để loại trường hợp này.
+- Khung biển của xe máy chạy nhanh đi trước biển thật khoảng 15–23 điểm ảnh (khoảng 0,05 giây). Đo bằng cách chạy lại mô hình phát hiện trên đúng khung hình tại từng thời điểm cho thấy nguyên nhân: bộ lọc `fps` của ffmpeg gán lại dấu thời gian cho khung được chọn, nên "khung thứ i ở giây i/8" không còn đúng. Sau khi chuyển sang chọn khung bằng bộ lọc `select` và đọc dấu thời gian thật, độ lệch tại các thời điểm lấy mẫu còn 0–3 điểm ảnh, giữa hai mẫu tối đa khoảng 9 điểm ảnh (xe tăng tốc nên nội suy tuyến tính không khớp hoàn toàn).
+
+Kết quả sau khi sửa: 5 xe, xử lý trong khoảng 30 giây cho 19 giây video. Ô tô 56P-5644 được theo dõi liên tục từ giây 0,8 đến hết video và đọc đúng; hai xe máy 59-G3 073.26 và 29-C2 005.60 đọc đúng (so với biển nhìn bằng mắt khi phóng to). Biển của xe máy chở thùng hàng chỉ cao khoảng 30 điểm ảnh và bị mờ: năm lần đọc cho các chuỗi khác nhau (ví dụ 59Z-007.74, trong khi bằng mắt đọc được khoảng 59-S7 007.74), nên sau khi thêm luật không lưu biển đọc không thống nhất, xe này không còn được lưu; kết quả cuối là 4 xe. Biển của xe máy cuối cùng (59-P2 551.67) quá mờ để kiểm chứng bằng mắt.
+
+---
+
+## 9. Camera trực tiếp
+
+Trang Camera nhận dạng biển số từ webcam theo thời gian thực (chương 10 của kế hoạch), dùng lại bộ theo dõi xe của mục 8. Yêu cầu giống video: hình camera không bị chậm, khung biển chạy liên tục theo xe, mỗi xe chỉ lưu một lần với khung hình rõ nhất.
+
+**Luồng xử lý.** Trình duyệt mở webcam bằng `getUserMedia` và tự hiển thị hình, nên hình không phụ thuộc tốc độ nhận dạng. Song song, trang chụp khung hình hiện tại (cạnh dài tối đa 1280 điểm ảnh, JPEG), gửi lên `POST /api/camera/:id/frames` kèm thời điểm chụp, và chỉ gửi khung tiếp theo khi đã nhận trả lời; nhờ vậy độ trễ không bao giờ dồn lại, máy chậm thì chỉ gửi thưa hơn. Các yêu cầu gửi khung (đã đăng nhập) không bị tính vào giới hạn 1000 yêu cầu mỗi 15 phút của API, vì camera gửi khoảng 400 khung mỗi phút. Với mỗi khung, backend chỉ chạy phát hiện và theo dõi (khoảng 100–200 ms) rồi trả về các khung biển hiện có, kèm biển số đã đọc được của từng xe. Việc đọc ký tự chạy nền, mỗi lần một xe, ưu tiên xe được đọc ít nhất, ở chế độ đọc nhanh (một biến thể cắt ảnh thay vì bốn, khoảng 100 ms thay vì 400 ms, đo trên các biển của video thử cho cùng kết quả), vì mỗi xe sẽ còn được đọc lại trên các khung sau.
+
+**Lưu và cảnh báo.** Một xe được lưu (nguồn "webcam") ngay khi hai lần đọc cho cùng một biển hợp lệ, không cần chờ xe đi khỏi; xe rời khung hình với một hoặc hai lần đọc hợp lệ thì lưu lần đọc tốt nhất; xe có từ ba lần đọc hợp lệ trở lên mà không thống nhất được, kể cả khi bỏ phiếu theo từng ký tự như ở mục 8, thì không lưu, vì biển quá nhỏ hoặc mờ để tin được. Cùng một biển xuất hiện lại trong vòng 10 giây (xe dừng ở cổng, bị che rồi hiện lại) không được lưu thêm. Vật đã đọc hai lần mà không ra biển hợp lệ (vạch kẻ đường) bị loại và không vẽ nữa. Khi một biển trong danh sách đen được lưu, trang hiện cảnh báo nổi bật ngay.
+
+**Hiển thị.** Trả lời đến 5–7 lần mỗi giây và trễ khoảng 0,1–0,3 giây so với hình, nên ở mỗi lần màn hình làm tươi, khung biển được dời tiếp theo vận tốc của hai lần trả lời gần nhất (tối đa 0,4 giây) để bám theo xe thay vì nhảy từng nấc và chạy sau xe. Biển chưa đọc được hiện nhãn "Đang đọc…", biển đã lưu có dấu ✓. Trang có ô chọn camera khi máy có nhiều camera (ví dụ webcam của laptop và điện thoại dùng làm webcam).
+
+**Thử nghiệm.** Không có webcam thật trên máy phát triển, nên thử nghiệm dùng camera giả của trình duyệt Edge, phát lại video thực tế 19 giây ở mục 8 như một webcam, và một kịch bản gửi từng khung của video lên API đúng nhịp thời gian thực. Các lần thử đầu cho thấy ba vấn đề, đã sửa:
+
+- Xe máy chạy nhanh bị tách thành nhiều "xe": ở 5 khung/giây, biển xe máy dịch khoảng 70 điểm ảnh giữa hai khung, xa hơn ngưỡng ghép 1,5 lần cỡ biển, trong khi xe mới thấy một lần chưa có vận tốc để dự đoán. Ngưỡng cho xe mới thấy một lần được nới lên 3 lần cỡ biển.
+- Đọc ký tự đến chậm (ô tô hiện biển sau 3,4 giây, xác nhận sau 7 giây) vì mỗi lần đọc chạy đủ bốn biến thể và hàng đợi bị chiếm bởi các vạch kẻ đường. Sau khi dùng chế độ đọc nhanh, ưu tiên xe chưa đọc và bỏ các vật không phải biển, ô tô hiện biển sau 0,4 giây và được lưu sau 1 giây; hai xe máy hiện biển khoảng 0,4–0,8 giây sau khi vào khung.
+- Khung cũ còn sót lại cạnh khung mới khi một xe được gán mã theo dõi mới: phía trình duyệt nay bỏ ngay biển vắng mặt trong hai lần trả lời liên tiếp.
+
+Hai vấn đề nữa lộ ra khi chạy trong Docker (máy chủ chậm hơn, khoảng 4,5 khung/giây): một xe máy bị lưu hai lần với hai cách đọc sai khác nhau (59-D0 073.26 và 59-G3 079.76), và có xe đọc ba lần ra ba chuỗi gần giống nhau (29C200980, 29C200560, 29D200560) nên bị coi là không đọc được. Bỏ phiếu theo từng ký tự (mục 8) giải quyết cả hai: chuỗi được xác nhận sớm và đúng, nên không còn lần lưu thứ hai.
+
+Kết quả cuối, chạy lại video 19 giây đúng nhịp thời gian thực ở cả 4 và 5 khung/giây: ô tô 56P-5644 được lưu sau khoảng 1–1,2 giây kể từ khi xuất hiện; hai xe máy 59-G3 073.26 và 29-C2 005.60 được lưu đúng, mỗi xe một lần; xe máy cuối được lưu là 59-P2 551.67; biển xe máy chở thùng hàng không được lưu vì các lần đọc không thống nhất; vạch kẻ đường không được lưu và không còn hiện khung. Với camera giả trong trình duyệt: 4,5–6,5 khung/giây, máy chủ xử lý 120–210 ms mỗi khung. Hạn chế: chưa thử với webcam thật; tốc độ phụ thuộc CPU của máy chủ; trình duyệt chỉ cho dùng camera trên trang mở bằng `localhost` hoặc HTTPS.
+
+---
+
+## 10. Những điểm khác với kế hoạch ban đầu
 
 | Kế hoạch | Thực tế | Lý do |
 |---|---|---|
 | PyTorch CUDA 12.8 | PyTorch CUDA 11.8 | Driver GPU 517.48 không hỗ trợ CUDA 12.8 |
-| Batch 16 khi huấn luyện | Batch 8 | Hết bộ nhớ GPU 6 GB ở bước đánh giá |
+| Batch 16 khi huấn luyện | Batch 4 | GPU 6 GB; bước đánh giá dùng batch gấp đôi và khối attention của YOLO12 tốn bộ nhớ |
 | YOLO nhận dạng ký tự | PaddleOCR (ONNX) kết hợp mô hình CRNN tự huấn luyện | Không có dữ liệu gán nhãn ký tự (dùng gán nhãn tự động); PaddleOCR yếu với biển nhỏ |
 | Letterbox khi nhận dạng | Ban đầu kéo giãn, sau chuyển sang letterbox | Ảnh huấn luyện bị kéo giãn; ảnh thực tế chữ nhật cho thấy letterbox tốt hơn |
 | Một lần đọc mỗi biển | Bỏ phiếu trên bốn biến thể | Kết quả OCR với biển nhỏ không ổn định |
@@ -358,10 +400,11 @@ Trong giai đoạn chưa có backend, giao diện chạy với một bộ dữ l
 
 ---
 
-## 9. Hạn chế và hướng phát triển
+## 11. Hạn chế và hướng phát triển
 
 - Mẫu đánh giá OCR (42 biển) có đáp án do người thực hiện tự đọc, có 4 biển chưa chắc chắn; cần xây dựng tập kiểm thử khoảng 200 ảnh có đáp án được kiểm tra lại để có con số chính thức.
-- Mô hình bốn góc đôi khi bỏ sót biển rất yếu mà mô hình phát hiện cũ còn thấy được; có thể kết hợp kết quả của hai mô hình.
+- Mô hình bốn góc đôi khi bỏ sót biển rất yếu ở xa (ví dụ biển 51H-709.67 trên ảnh đường phố ở mục 5.7); có thể huấn luyện thêm một mô hình phát hiện YOLO12 thường rồi kết hợp kết quả của hai mô hình.
+- Nhận dạng từ video đọc sai biển xe máy nhỏ và mờ (cao khoảng 30 điểm ảnh); mới thử trên hai video. Trên CPU, thời gian xử lý khoảng 1,5–2 lần độ dài video.
 - Mô hình phát hiện đôi khi nhận nhầm vật thể khác là biển số ở bối cảnh cổng barrier; các khung này hiện bị loại nhờ bước kiểm tra định dạng của OCR.
-- Bước còn lại theo kế hoạch: tính năng nhận dạng qua webcam thời gian thực.
+- Camera trực tiếp mới được thử bằng camera giả của trình duyệt (phát lại video); cần thử với webcam hoặc điện thoại thật.
 - Số liệu chính thức của toàn hệ thống phụ thuộc vào việc duyệt xong đáp án của tập kiểm thử 200 ảnh.
