@@ -1,6 +1,6 @@
 // Plate detection (docs 6.2). Two exported model kinds, both with nms=True:
-//  - plate.onnx       (YOLO11 detect) -> [1, 300, 6]  x1 y1 x2 y2 conf cls
-//  - plate_pose.onnx  (YOLO11-pose)   -> [1, 300, 18] ... + 4 corners (x, y, visibility), docs 5.5
+//  - plate.onnx       (YOLO12 detect) -> [1, 300, 6]  x1 y1 x2 y2 conf cls
+//  - plate_pose.onnx  (YOLO12-pose)   -> [1, 300, 18] ... + 4 corners (x, y, visibility), docs 5.5
 import sharp from "sharp";
 import ort from "onnxruntime-node";
 import { toTensor, type Decoded, type ResizeMode } from "./image.ts";

@@ -9,7 +9,7 @@ COPY prisma ./prisma
 RUN DATABASE_URL=postgresql://build:build@localhost:5432/build npm ci --no-audit --no-fund
 
 COPY src ./src
-# trained / downloaded models (not in git): plate.onnx, plate_ocr_v2.{onnx,json}, rec_ch_v4_server.onnx, ppocr_keys_v1.txt
+# trained / downloaded models (not in git): plate_pose.onnx, plate_ocr_v2.{onnx,json}, rec_ch_v4_server.onnx, ppocr_keys_v1.txt
 COPY models ./models
 
 EXPOSE 3001

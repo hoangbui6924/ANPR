@@ -30,7 +30,7 @@ if (extraCsv) {
   }
 }
 
-const det = await ort.InferenceSession.create(path.join(M, "plate.onnx"));
+const det = await ort.InferenceSession.create(path.join(M, "plate_pose.onnx"));
 const ocr = await loadOcr(path.join(M, "rec_ch_v4_server.onnx"), path.join(M, "ppocr_keys_v1.txt"));
 const configs: { name: string; mode: ResizeMode; variants: ReadVariant[] }[] = [
   { name: "stretch + gray (old default)", mode: "stretch", variants: [{ pad: 0.06, enhance: { gray: true } }] },

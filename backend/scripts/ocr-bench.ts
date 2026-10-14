@@ -20,7 +20,7 @@ for (const line of fs.readFileSync(path.join(import.meta.dirname, "gt-sample.csv
 }
 const total = [...gt.values()].reduce((a, v) => a + v.length, 0);
 
-const det = await ort.InferenceSession.create(path.join(M, "plate.onnx"));
+const det = await ort.InferenceSession.create(path.join(M, "plate_pose.onnx"));
 const models: Record<string, OcrModel> = {
   ch_v4: await loadOcr(path.join(M, "rec_ch_v4.onnx"), path.join(M, "ppocr_keys_v1.txt")),
   ch_v4_server: await loadOcr(path.join(M, "rec_ch_v4_server.onnx"), path.join(M, "ppocr_keys_v1.txt")),

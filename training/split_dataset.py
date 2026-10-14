@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "Vietnam License Plate.v2i.yolov11"
+SRC = ROOT / "Vietnam License Plate.v2i"
 DST = ROOT / "datasets" / "vn-plate"
 SPLITS = ("train", "valid", "test")
 SEED = 42

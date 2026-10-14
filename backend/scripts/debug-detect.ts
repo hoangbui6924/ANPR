@@ -10,7 +10,7 @@ import { DEFAULT_VARIANTS, readBest } from "../src/recognition/index.ts";
 const M = path.join(import.meta.dirname, "../models");
 const img = await decode(process.argv[2]);
 console.log(`image ${img.width}x${img.height}`);
-const det = await ort.InferenceSession.create(path.join(M, "plate.onnx"));
+const det = await ort.InferenceSession.create(path.join(M, "plate_pose.onnx"));
 const ocr = [await loadOcr(path.join(M, "rec_ch_v4_server.onnx"), path.join(M, "ppocr_keys_v1.txt")), await loadPlateOcr(path.join(M, "plate_ocr_v2.onnx"))];
 
 async function show(name: string, boxes: PlateBox[]) {

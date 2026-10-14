@@ -2,7 +2,7 @@
 
 Ghi chú ngày 05/10/2026. Đây chỉ là kế hoạch, chưa triển khai.
 
-**Hiện trạng:** nhận dạng ảnh tĩnh và cả thư mục ảnh chạy ổn (YOLO11s-pose + nắn phối cảnh; PaddleOCR + CRNN tự huấn luyện cùng bỏ phiếu); web + API + PostgreSQL chạy được bằng Docker Compose (http://localhost:8080).
+**Hiện trạng:** nhận dạng ảnh tĩnh và cả thư mục ảnh chạy ổn (YOLO12s-pose + nắn phối cảnh; PaddleOCR + CRNN tự huấn luyện cùng bỏ phiếu); web + API + PostgreSQL chạy được bằng Docker Compose (http://localhost:8080).
 
 ---
 

@@ -1,6 +1,6 @@
 # Quá trình xây dựng và huấn luyện hệ thống nhận dạng biển số xe (ANPR)
 
-Tài liệu này ghi lại các bước đã thực hiện thực tế khi xây dựng website nhận dạng biển số xe máy và ô tô Việt Nam bằng YOLOv11, theo kế hoạch trong tài liệu "Quy trình xây dựng website ANPR YOLOv11". Mỗi phần mô tả việc đã làm, kết quả đo được, các vấn đề gặp phải và cách giải quyết, kèm lý do của từng quyết định. Những chỗ khác với kế hoạch ban đầu được nêu rõ để thuận tiện khi viết báo cáo.
+Tài liệu này ghi lại các bước đã thực hiện thực tế khi xây dựng website nhận dạng biển số xe máy và ô tô Việt Nam bằng YOLOv12, theo kế hoạch trong tài liệu "Quy trình xây dựng website ANPR YOLOv12". Mỗi phần mô tả việc đã làm, kết quả đo được, các vấn đề gặp phải và cách giải quyết, kèm lý do của từng quyết định. Những chỗ khác với kế hoạch ban đầu được nêu rõ để thuận tiện khi viết báo cáo.
 
 ---
 
@@ -57,7 +57,7 @@ Sau khi chia, nhãn được vẽ lại lên 24 ảnh ngẫu nhiên của tập 
 
 ### 3.1 Cấu hình
 
-Mô hình phát hiện biển số dùng YOLO11s (bản "small", cân bằng giữa tốc độ và độ chính xác), huấn luyện với ảnh 640×640, tối đa 100 epoch, cơ chế dừng sớm sau 20 epoch không cải thiện (patience 20), seed 42.
+Mô hình phát hiện biển số dùng YOLO12s (bản "small", cân bằng giữa tốc độ và độ chính xác), huấn luyện với ảnh 640×640, tối đa 100 epoch, cơ chế dừng sớm sau 20 epoch không cải thiện (patience 20), seed 42.
 
 Lần chạy đầu với batch 16 bị lỗi hết bộ nhớ GPU ngay ở bước đánh giá cuối epoch đầu tiên: khi huấn luyện, GPU dùng khoảng 3,95 GB, nhưng bước đánh giá của Ultralytics dùng batch gấp đôi, cộng với phần bộ nhớ hệ điều hành đang chiếm, nên vượt quá 6 GB. Theo đúng phương án dự phòng trong kế hoạch, batch được giảm xuống 8 và số luồng nạp dữ liệu giảm xuống 2. Lần chạy thứ hai diễn ra ổn định.
 
@@ -103,7 +103,7 @@ yolo export model=runs/plate/weights/best.pt format=onnx imgsz=640 nms=True
 
 ### 4.1 Chọn PaddleOCR
 
-Kế hoạch ban đầu chọn huấn luyện một mô hình YOLO11 nhận dạng từng ký tự (36 lớp), nhưng hướng này cần một bộ dữ liệu gán nhãn từng ký tự, mà bộ dữ liệu hiện có chỉ chứa vị trí biển. Vì vậy nhóm chuyển sang phương án dự phòng trong kế hoạch: dùng mô hình nhận dạng chữ của PaddleOCR ở định dạng ONNX. Cách này giữ nguyên kiến trúc "hướng A" (chỉ một backend Node.js, không cần dịch vụ Python), vì mô hình ONNX chạy trực tiếp bằng `onnxruntime-node`.
+Kế hoạch ban đầu chọn huấn luyện một mô hình YOLO nhận dạng từng ký tự (36 lớp), nhưng hướng này cần một bộ dữ liệu gán nhãn từng ký tự, mà bộ dữ liệu hiện có chỉ chứa vị trí biển. Vì vậy nhóm chuyển sang phương án dự phòng trong kế hoạch: dùng mô hình nhận dạng chữ của PaddleOCR ở định dạng ONNX. Cách này giữ nguyên kiến trúc "hướng A" (chỉ một backend Node.js, không cần dịch vụ Python), vì mô hình ONNX chạy trực tiếp bằng `onnxruntime-node`.
 
 Mô hình nhận dạng của PaddleOCR chỉ đọc một dòng chữ mỗi lần và trả về xác suất ký tự theo từng bước thời gian; nhóm tự cài đặt phần tiền xử lý (đưa ảnh về chiều cao 48 điểm ảnh, chuẩn hóa về khoảng [-1, 1], thứ tự kênh BGR) và phần giải mã CTC tham lam (chọn ký tự có xác suất cao nhất ở mỗi bước, gộp ký tự lặp và bỏ ký tự trống).
 
@@ -260,33 +260,31 @@ Giải pháp gồm ba phần. Thứ nhất, với ảnh có cạnh dài lớn h�
 
 Kết quả: ảnh đường phố trên được nhận đủ 5 biển và đọc đúng cả 5 (trong đó có một biển hai dòng của xe bán tải và một biển chỉ đạt độ tin cậy phát hiện 0,26), ảnh thực tế ở mục 5.1 vẫn đọc đúng, và bộ thử biển nhỏ không bị giảm (37/36/34/27). Đổi lại, thời gian xử lý ảnh lớn tăng lên khoảng 1–2,3 giây trên CPU, tùy số biển trong ảnh.
 
-### 5.8 Mô hình bốn góc (YOLO11-pose) và nắn phối cảnh
+### 5.8 Mô hình bốn góc (YOLO12-pose) và nắn phối cảnh
 
-Biển chụp xéo là nhóm lỗi lớn còn lại, vì khung chữ nhật của biển bị méo thành hình thang chứa nhiều nền và chữ bị nghiêng. Theo phương án nâng cấp trong kế hoạch, nhóm huấn luyện thêm một mô hình YOLO11s-pose, ngoài khung bao còn dự đoán bốn góc của biển, tận dụng nhãn đa giác bốn góc sẵn có của bộ dữ liệu.
+Biển chụp xéo là nhóm lỗi lớn còn lại, vì khung chữ nhật của biển bị méo thành hình thang chứa nhiều nền và chữ bị nghiêng. Theo phương án nâng cấp trong kế hoạch, nhóm huấn luyện thêm một mô hình YOLO12s-pose, ngoài khung bao còn dự đoán bốn góc của biển, tận dụng nhãn đa giác bốn góc sẵn có của bộ dữ liệu.
 
 **Chuẩn bị dữ liệu.** Nhãn đa giác được chuyển sang định dạng pose của YOLO: khung bao kèm bốn điểm góc theo thứ tự trên trái, trên phải, dưới phải, dưới trái. Với 51 đa giác có 6–7 điểm, bốn góc được chọn bằng quy tắc điểm cực trị (góc trên trái có tổng x + y nhỏ nhất, góc dưới phải có tổng lớn nhất, góc trên phải có hiệu x − y lớn nhất, góc dưới trái có hiệu nhỏ nhất). Khi lật ảnh ngang để tăng cường dữ liệu, các góc trái và phải được hoán đổi tương ứng.
 
-**Huấn luyện.** Mô hình huấn luyện 100 epoch trên ảnh 640×640, mất 2,64 giờ. Máy chỉ có GPU 6 GB và bộ nhớ hệ thống hạn chế, nên các lần chạy đầu gặp lỗi thiếu bộ nhớ (cả GPU lẫn RAM, vì mỗi tiến trình nạp dữ liệu trên Windows nạp lại toàn bộ PyTorch và CUDA). Cấu hình ổn định cuối cùng là batch 6 và không dùng tiến trình nạp dữ liệu phụ; quá trình huấn luyện được tiếp tục từ checkpoint sau khi bị gián đoạn.
+**Huấn luyện.** Ultralytics chỉ phát hành trọng số huấn luyện sẵn của YOLO12 cho bài toán phát hiện, không có bản pose. Vì vậy mô hình được dựng từ tệp cấu hình `yolo12s-pose.yaml`, rồi nạp trọng số của `yolo12s.pt` cho các lớp trùng khớp (691/733 tham số; phần đầu dự đoán bốn góc học từ đầu). Mô hình huấn luyện 100 epoch trên ảnh 640×640, mất 4,45 giờ. Máy chỉ có GPU 6 GB và bộ nhớ hệ thống hạn chế: mỗi tiến trình nạp dữ liệu trên Windows nạp lại toàn bộ PyTorch và CUDA, dễ gây thiếu RAM, nên huấn luyện không dùng tiến trình nạp dữ liệu phụ; khối attention của YOLO12 tốn bộ nhớ GPU hơn nên dùng batch 4. Với cấu hình này, phần nạp và tăng cường ảnh trên CPU là nút thắt về thời gian (GPU chỉ sử dụng khoảng 30%).
 
 | Mô hình (tập test 455 ảnh) | Precision | Recall | mAP50 | mAP50-95 khung | mAP50-95 bốn góc |
 |---|---|---|---|---|---|
-| YOLO11s (phát hiện) | 0,987 | 0,989 | 0,992 | 0,904 | — |
-| YOLO11s-pose | 0,988 | 0,988 | 0,994 | 0,908 | 0,992 |
+| YOLO12s-pose | 0,990 | 0,983 | 0,989 | 0,906 | 0,989 |
 
-Mô hình pose phát hiện biển ngang hoặc nhỉnh hơn mô hình phát hiện cũ, đồng thời xác định bốn góc gần như chính xác tuyệt đối.
+Mô hình phát hiện biển với độ chính xác cao, đồng thời xác định bốn góc gần như chính xác tuyệt đối.
 
 **Nắn phối cảnh.** Từ bốn góc, hệ thống tính ma trận biến đổi phối cảnh (homography, giải hệ tám phương trình tuyến tính) ánh xạ hình chữ nhật đích về tứ giác của biển trên ảnh gốc, rồi lấy mẫu lại từng điểm ảnh bằng nội suy song tuyến. Kích thước ảnh đích lấy theo cặp cạnh đối dài hơn của tứ giác, kèm một lề nhỏ quanh biển. Kết quả là một ảnh biển thẳng, đúng tỷ lệ, được đưa vào bước tách dòng và OCR như trước.
 
 **Kết quả trên bộ thử biển nhỏ** (toàn bộ chuỗi xử lý, số biển đọc đúng trên 42):
 
-| Cấu hình | ×1 | ×0,5 | ×0,35 | ×0,25 | Thời gian (×0,25) |
+| Cấu hình (YOLO12s-pose) | ×1 | ×0,5 | ×0,35 | ×0,25 | Thời gian (×0,25) |
 |---|---|---|---|---|---|
-| Mô hình phát hiện cũ | 37 | 36 | 34 | 27 | 307 ms |
-| Mô hình pose, không nắn | 39 | 39 | 35 | 28 | 312 ms |
-| Mô hình pose, chỉ đọc ảnh đã nắn | 38 | 36 | 36 | 29 | 314 ms |
-| Mô hình pose, đọc cả ảnh nắn và khung thường | 38 | 38 | 36 | 31 | 475 ms |
+| Không nắn | 38 | 38 | 33 | 31 | 368 ms |
+| Chỉ đọc ảnh đã nắn | 39 | 38 | 35 | 29 | 377 ms |
+| Đọc cả ảnh nắn và khung thường | 39 | 38 | 35 | 33 | 574 ms |
 
-Cấu hình đọc cả ảnh đã nắn lẫn khung thường (các kết quả cùng bỏ phiếu) được chọn làm mặc định vì cải thiện rõ nhất ở biển nhỏ: ở mức chữ cao khoảng 17 điểm ảnh, số biển đọc đúng tăng từ 27 lên 31, tức từ 21/42 ở cấu hình ban đầu chỉ dùng PaddleOCR lên 31/42. Ảnh thực tế ở mục 5.1 vẫn được đọc đúng, độ tin cậy phát hiện tăng từ 0,43 lên 0,74. Hạn chế: trên ảnh đường phố ở mục 5.7, mô hình pose không phát hiện được biển yếu nhất (mô hình cũ chỉ đạt độ tin cậy 0,26 với biển này), nên còn 4/5 biển; hướng xử lý có thể là kết hợp kết quả của cả hai mô hình phát hiện.
+Cấu hình đọc cả ảnh đã nắn lẫn khung thường (các kết quả cùng bỏ phiếu) được chọn làm mặc định vì cho kết quả tốt nhất ở mọi mức thu nhỏ: ở mức chữ cao khoảng 17 điểm ảnh, số biển đọc đúng là 33/42, so với 21/42 ở cấu hình ban đầu chỉ dùng PaddleOCR. Đổi lại, thời gian xử lý tăng khoảng 200 ms mỗi ảnh vì mỗi biển được đọc hai lần. Ảnh thực tế ở mục 5.1 vẫn được đọc đúng (37A-715.32) với độ tin cậy phát hiện 0,88. Hạn chế: trên ảnh đường phố ở mục 5.7, hệ thống đọc đúng 4/5 biển (30E-220.70, 30F-748.46, 14C-147.59, 29V-7427) nhưng không phát hiện được biển yếu nhất (51H-709.67); thời gian xử lý ảnh này khoảng 2,7 giây trên CPU.
 
 ---
 
@@ -349,13 +347,13 @@ Trong giai đoạn chưa có backend, giao diện chạy với một bộ dữ l
 |---|---|---|
 | PyTorch CUDA 12.8 | PyTorch CUDA 11.8 | Driver GPU 517.48 không hỗ trợ CUDA 12.8 |
 | Batch 16 khi huấn luyện | Batch 8 | Hết bộ nhớ GPU 6 GB ở bước đánh giá |
-| YOLO11 nhận dạng ký tự | PaddleOCR (ONNX) kết hợp mô hình CRNN tự huấn luyện | Không có dữ liệu gán nhãn ký tự (dùng gán nhãn tự động); PaddleOCR yếu với biển nhỏ |
+| YOLO nhận dạng ký tự | PaddleOCR (ONNX) kết hợp mô hình CRNN tự huấn luyện | Không có dữ liệu gán nhãn ký tự (dùng gán nhãn tự động); PaddleOCR yếu với biển nhỏ |
 | Letterbox khi nhận dạng | Ban đầu kéo giãn, sau chuyển sang letterbox | Ảnh huấn luyện bị kéo giãn; ảnh thực tế chữ nhật cho thấy letterbox tốt hơn |
 | Một lần đọc mỗi biển | Bỏ phiếu trên bốn biến thể | Kết quả OCR với biển nhỏ không ổn định |
 | shadcn/ui | Bộ thành phần giao diện tự viết cùng phong cách | Công cụ cài đặt của shadcn/ui cần thao tác tương tác |
 | bcrypt | bcryptjs | Tránh biên dịch mô-đun gốc trên Windows |
 | Cổng API 3000, web cổng 80 | API cổng 3001, web cổng 8080 | Hai cổng này đã bị ứng dụng khác trên máy dùng |
-| YOLO11-pose là nâng cấp tùy chọn | Đã huấn luyện và dùng làm mô hình phát hiện mặc định | Cải thiện đọc biển nhỏ và biển chụp xéo nhờ nắn phối cảnh |
+| YOLO12-pose là nâng cấp tùy chọn | Đã huấn luyện và dùng làm mô hình phát hiện mặc định | Cải thiện đọc biển nhỏ và biển chụp xéo nhờ nắn phối cảnh |
 | Prisma (bản cũ) | Prisma 7 | Bản mới nhất khi thực hiện; cấu hình kết nối thay đổi |
 
 ---

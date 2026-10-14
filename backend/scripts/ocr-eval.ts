@@ -17,7 +17,7 @@ const M = path.join(import.meta.dirname, "../models");
 const OUT = path.join(import.meta.dirname, "out");
 fs.mkdirSync(OUT, { recursive: true });
 
-const det = await ort.InferenceSession.create(path.join(M, "plate.onnx"));
+const det = await ort.InferenceSession.create(path.join(M, "plate_pose.onnx"));
 const models = {
   en_v3: await loadOcr(path.join(M, "rec_en_v3.onnx"), path.join(M, "en_dict.txt")),
   ch_v4: await loadOcr(path.join(M, "rec_ch_v4.onnx"), path.join(M, "ppocr_keys_v1.txt")),

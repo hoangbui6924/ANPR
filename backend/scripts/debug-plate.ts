@@ -10,7 +10,7 @@ import { crop, loadOcr, readLine, enhance } from "../src/recognition/ocr.ts";
 const M = path.join(import.meta.dirname, "../models");
 const img = await decode(process.argv[2]);
 console.log(`image ${img.width}x${img.height}`);
-const det = await ort.InferenceSession.create(path.join(M, "plate.onnx"));
+const det = await ort.InferenceSession.create(path.join(M, "plate_pose.onnx"));
 const models = {
   en_v3: await loadOcr(path.join(M, "rec_en_v3.onnx"), path.join(M, "en_dict.txt")),
   ch_v4: await loadOcr(path.join(M, "rec_ch_v4.onnx"), path.join(M, "ppocr_keys_v1.txt")),

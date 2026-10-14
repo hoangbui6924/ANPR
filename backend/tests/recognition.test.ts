@@ -41,7 +41,7 @@ describe("plateRows", () => {
 });
 
 const MODELS = path.resolve(import.meta.dirname, "../models");
-const haveModels = ["plate.onnx", "rec_ch_v4_server.onnx"].every((f) => fs.existsSync(path.join(MODELS, f)));
+const haveModels = ["plate_pose.onnx", "rec_ch_v4_server.onnx"].every((f) => fs.existsSync(path.join(MODELS, f)));
 
 describe.skipIf(!haveModels)("recognize (real models)", () => {
   it("reads a 1-line car plate and a 2-line motorbike plate", async () => {

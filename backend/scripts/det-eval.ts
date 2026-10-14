@@ -8,7 +8,7 @@ import { detectPlates, type PlateBox } from "../src/recognition/detect.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const TEST = path.join(ROOT, "datasets/vn-plate/test");
-const session = await ort.InferenceSession.create(path.join(import.meta.dirname, "../models/plate.onnx"));
+const session = await ort.InferenceSession.create(path.join(import.meta.dirname, "../models/plate_pose.onnx"));
 
 type Gt = { x1: number; y1: number; x2: number; y2: number; cls: number };
 function readGt(file: string, w: number, h: number): Gt[] {

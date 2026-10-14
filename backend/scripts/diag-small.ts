@@ -14,7 +14,7 @@ const ROOT = path.resolve(import.meta.dirname, "../..");
 const M = path.join(import.meta.dirname, "../models");
 const dir = path.join(ROOT, "datasets/vn-plate/test");
 const files = fs.readdirSync(path.join(dir, "images"));
-const det = await ort.InferenceSession.create(path.join(M, "plate.onnx"));
+const det = await ort.InferenceSession.create(path.join(M, "plate_pose.onnx"));
 const modelArg = process.argv[2] ?? "rec_ch_v4_server.onnx";
 const load = (m: string, dict?: string) => (m.includes("plate_ocr") ? loadPlateOcr(path.join(M, m)) : loadOcr(path.join(M, m), path.join(M, dict ?? "ppocr_keys_v1.txt")));
 // "a.onnx+b.onnx" = ensemble: both models vote together

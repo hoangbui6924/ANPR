@@ -1,6 +1,6 @@
-# Train the plate detector (docs 5.1): YOLO11s, 640, 100 epochs, early stop after 20 without improvement
+# Train the plate detector (docs 5.1): YOLO12s, 640, 100 epochs, early stop after 20 without improvement
 #   python train_plate.py            -> runs/plate/weights/best.pt
-#   python train_plate.py --batch 8  (if CUDA runs out of memory on the 6 GB GPU)
+#   python train_plate.py --batch 2  (if CUDA runs out of memory on the 6 GB GPU)
 import argparse
 from pathlib import Path
 
@@ -12,9 +12,9 @@ HERE = Path(__file__).resolve().parent
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default=str(HERE / "yolo11s.pt"))
+    ap.add_argument("--model", default=str(HERE / "yolo12s.pt"))
     ap.add_argument("--epochs", type=int, default=100)
-    ap.add_argument("--batch", type=int, default=16)
+    ap.add_argument("--batch", type=int, default=4)
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--resume", action="store_true", help="continue runs/plate after an interruption")
     args = ap.parse_args()

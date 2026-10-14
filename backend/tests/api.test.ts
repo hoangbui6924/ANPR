@@ -8,7 +8,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const MODELS = path.resolve(import.meta.dirname, "../models");
-const haveModels = ["plate.onnx", "rec_ch_v4_server.onnx"].every((f) => fs.existsSync(path.join(MODELS, f)));
+const haveModels = ["plate_pose.onnx", "rec_ch_v4_server.onnx"].every((f) => fs.existsSync(path.join(MODELS, f)));
 
 let dbOk = false;
 try {

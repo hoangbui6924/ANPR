@@ -2,7 +2,7 @@
 
 Website cho phép tải ảnh (một ảnh hoặc cả thư mục) để phát hiện và đọc biển số xe Việt Nam, lưu lịch sử, tìm kiếm biển số gần đúng, thống kê và cảnh báo xe trong danh sách đen.
 
-- **Phát hiện biển số:** YOLO11s-pose (khung + 4 góc biển để nắn phối cảnh) huấn luyện trên bộ dữ liệu Vietnam License Plate (Roboflow, 4.534 ảnh), chạy bằng ONNX Runtime ngay trong Node.js.
+- **Phát hiện biển số:** YOLO12s-pose (khung + 4 góc biển để nắn phối cảnh) huấn luyện trên bộ dữ liệu Vietnam License Plate (Roboflow, 4.534 ảnh), chạy bằng ONNX Runtime ngay trong Node.js.
 - **Đọc ký tự:** PaddleOCR (PP-OCRv4 server, ONNX) kết hợp bỏ phiếu với một mô hình CRNN tự huấn luyện cho biển số độ phân giải thấp.
 - **Web:** Node.js + Express 5 + Prisma 7 + PostgreSQL 16; React 19 + Vite + TailwindCSS 4.
 
@@ -23,11 +23,11 @@ Quá trình xây dựng, các thử nghiệm và số liệu chi tiết: [docs/q
 ```
 ANPR/
 ├── backend/            API Express + module nhận dạng (src/recognition) + Prisma
-│   ├── models/         plate_pose.onnx, plate.onnx, plate_ocr_v2.onnx, rec_ch_v4_server.onnx, ppocr_keys_v1.txt
+│   ├── models/         plate_pose.onnx, plate_ocr_v2.onnx, rec_ch_v4_server.onnx, ppocr_keys_v1.txt
 │   ├── scripts/        đánh giá, gán nhãn tự động, tạo tập kiểm thử, CLI nhận dạng
 │   └── tests/          Vitest + Supertest
 ├── frontend/           React + Vite (trang nhận dạng, lịch sử, danh sách xe, thống kê, người dùng)
-├── training/           script Python: chia dữ liệu, huấn luyện YOLO11 / YOLO11-pose / CRNN
+├── training/           script Python: chia dữ liệu, huấn luyện YOLO12 / YOLO12-pose / CRNN
 ├── datasets/           (không đưa lên git) dữ liệu đã chia lại, dữ liệu OCR, tập kiểm thử
 ├── docs/               tài liệu quá trình xây dựng
 └── docker-compose.yml  db + api + web
@@ -71,7 +71,7 @@ Nhận dạng nhanh từ dòng lệnh: `node scripts/recognize.ts <ảnh hoặc 
 | Tệp | Nguồn |
 |---|---|
 | `plate_pose.onnx` | Huấn luyện bằng `training/train_plate_pose.py` (dữ liệu: `training/make_pose_dataset.py`), xuất ONNX với `nms=True` |
-| `plate.onnx` | Huấn luyện bằng `training/train_plate.py`, xuất ONNX: `yolo export model=runs/plate/weights/best.pt format=onnx imgsz=640 nms=True` |
+| `plate.onnx` (tùy chọn, chỉ dùng khi thiếu `plate_pose.onnx`) | Huấn luyện bằng `training/train_plate.py`, xuất ONNX: `yolo export model=runs/plate/weights/best.pt format=onnx imgsz=640 nms=True` |
 | `plate_ocr_v2.onnx` + `.json` | Huấn luyện bằng `training/train_plate_ocr.py --epochs 150 --name plate_ocr_v2` trên dữ liệu tạo bởi `backend/scripts/pseudo-label.ts` |
 | `rec_ch_v4_server.onnx`, `ppocr_keys_v1.txt` | Tải bằng `backend/scripts/download-models.sh` (PaddleOCR PP-OCRv4, bản ONNX của RapidOCR) |
 

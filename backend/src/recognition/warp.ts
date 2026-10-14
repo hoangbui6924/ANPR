@@ -1,4 +1,4 @@
-// Perspective correction of a plate from its 4 corners (YOLO11-pose, docs 5.5): the quad
+// Perspective correction of a plate from its 4 corners (YOLO12-pose, docs 5.5): the quad
 // (top-left, top-right, bottom-right, bottom-left) is mapped to an upright rectangle before OCR.
 import type { Decoded } from "./image.ts";
 
