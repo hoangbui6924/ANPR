@@ -147,8 +147,8 @@
     </div>
     <div id="intro">
         <div class="card">
-            <h1>UNIVERSE</h1>
-            <p>Hàng trăm nghìn vì sao đang chờ được giải phóng.<br>Bấm để khai sinh thiên hà.</p>
+            <h1>Khai mở tinh hà</h1>
+            <p>Vạn thiên tinh thần còn chìm trong hỗn độn, chờ bản tọa điểm hóa khai thiên lập địa.<br>Nhấn xuống một chỉ, nghìn vạn tinh vực lập tức giáng thế!</p>
             <button id="startBtn">BẮT ĐẦU</button>
         </div>
     </div>
@@ -366,7 +366,7 @@
         }
 
         // ---------- spiral galaxy ----------
-        const GALAXY_R = 24;
+        const GALAXY_R = 40; // spiral-arm radius (was 24): a wider galaxy
         let galaxy;
         {
             let b = new PointBuilder();
@@ -374,12 +374,12 @@
             const inner = [1.0, 0.72, 0.42], mid = [1.0, 0.32, 0.62], outer = [0.55, 0.3, 1.0];
 
             // spiral arms
-            for (let i = 0; i < 70000; i++) {
+            for (let i = 0; i < 120000; i++) {
                 let arm = i % ARMS;
                 let rr = Math.pow(Math.random(), 1.5);
                 let r = 1.8 + rr * GALAXY_R;
-                let a = arm / ARMS * Math.PI * 2 + r * 0.33;
-                let sc = 0.3 + r * 0.07;
+                let a = arm / ARMS * Math.PI * 2 + r * 0.2; // same number of turns over the larger radius
+                let sc = 0.3 + r * 0.06;
                 let x = Math.cos(a) * r + gauss() * sc;
                 let z = Math.sin(a) * r + gauss() * sc;
                 let y = gauss() * (0.1 + 0.5 * Math.exp(-r / 5));
@@ -389,8 +389,8 @@
                 b.add(x, y, z, c.map(v => v * rand(0.5, 0.9)), rand(0.6, 1.8), Math.random(), 0.35);
             }
             // diffuse dust disk between the arms
-            for (let i = 0; i < 45000; i++) {
-                let r = 2 + Math.sqrt(Math.random()) * 38;
+            for (let i = 0; i < 80000; i++) {
+                let r = 2 + Math.sqrt(Math.random()) * 62;
                 let a = Math.random() * Math.PI * 2;
                 let c = [[0.8, 0.6, 1], [1, 0.65, 0.9], [0.9, 0.9, 1]][i % 3];
                 b.add(Math.cos(a) * r, gauss() * 0.25, Math.sin(a) * r, c.map(v => v * rand(0.15, 0.45)), rand(0.5, 1.5), Math.random(), 0.4);
@@ -850,40 +850,62 @@
         decor.scale.setScalar(0.001);
 
         // ---------- star portrait: click the chest -> the heart, scale and chest dots become the person ----------
-        const PORTRAIT_HEIGHT = 20, PORTRAIT_LIFT = 2.5, MORPH_DURATION = 3.5;
+        // Several photos: after the first one has formed, every IMAGE_SECONDS the same stars fly from the current
+        // photo to the next one (swinging out like the first morph), then back to the first after the last.
+        const PORTRAIT_HEIGHT = 20, PORTRAIT_LIFT = 6, MORPH_DURATION = 3.5, OPEN_DURATION = 5, IMAGE_SECONDS = 8;
         let portrait = null, morph = { value: 0 }, morphTarget = 0;
+        let swap = { value: 1 }, imageIndex = 0, imageClock = 0, images = [];
         let sources = [heart, ...libraParts]; // their dots are what flies into the portrait
-        if (window.PORTRAIT) {
-            let P = window.PORTRAIT, raw = Uint8Array.from(atob(P.data), c => c.charCodeAt(0));
+        let photos = window.PORTRAITS || (window.PORTRAIT ? [window.PORTRAIT] : []);
+        if (photos.length) {
             let n = sources.reduce((a, o) => a + o.geometry.attributes.position.count, 0);
-            let k = PORTRAIT_HEIGHT / P.height;
-            // shuffle target pixels so every source dot gets a random spot (repeats when there are more dots)
-            let perm = Array.from({ length: P.count }, (_, i) => i);
-            for (let i = perm.length - 1; i > 0; i--) {
-                let j = (Math.random() * (i + 1)) | 0;
-                [perm[i], perm[j]] = [perm[j], perm[i]];
-            }
-            let pos = new Float32Array(n * 3), col = new Float32Array(n * 3), srcCol = new Float32Array(n * 3);
-            let side = new Float32Array(n * 3), sizeFrom = new Float32Array(n), sizeTo = new Float32Array(n), delay = new Float32Array(n);
             const dark = [0.32, 0.18, 0.55], light = [1, 0.78, 0.95]; // galaxy violet -> pale pink
-            let v = new THREE.Vector3(), j = 0;
-            for (let obj of sources) {
-                let a = obj.geometry.attributes, srcSize = obj.material.uniforms.uSize.value;
-                for (let i = 0; i < a.position.count; i++, j++) {
+            // Photos differ in exposure and size: a dark photo is brightened until its bright parts match the
+            // first photo, and a photo spread over a larger area (same number of stars, so sparser) gets brighter stars.
+            let lum = (raw, o) => (0.3 * raw[o + 4] + 0.59 * raw[o + 5] + 0.11 * raw[o + 6]) / 255;
+            // world units per photo pixel: PORTRAIT_HEIGHT tall, but wide photos are shrunk so they stay in view
+            let scaleOf = P => PORTRAIT_HEIGHT / Math.max(P.height, P.width * 0.8);
+            let area = P => P.count * scaleOf(P) ** 2;
+            let refArea = area(photos[0]);
+            // target position + color of every star for one photo
+            let layout = P => {
+                let raw = Uint8Array.from(atob(P.data), c => c.charCodeAt(0));
+                let k = scaleOf(P);
+                let ls = Array.from({ length: P.count }, (_, i) => lum(raw, i * 7)).sort((a, b) => a - b);
+                let p90 = ls[Math.floor(P.count * 0.9)] || 1;
+                let gain = p90 < 0.5 ? Math.min(3, 0.5 / p90) : 1;
+                let density = THREE.MathUtils.clamp(area(P) / refArea, 1, 2);
+                // shuffle target pixels so every source dot gets a random spot (repeats when there are more dots)
+                let perm = Array.from({ length: P.count }, (_, i) => i);
+                for (let i = perm.length - 1; i > 0; i--) {
+                    let j = (Math.random() * (i + 1)) | 0;
+                    [perm[i], perm[j]] = [perm[j], perm[i]];
+                }
+                let pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+                for (let j = 0; j < n; j++) {
                     let o = perm[j % P.count] * 7, x = raw[o], y = raw[o + 1] | (raw[o + 2] << 8);
                     pos[j * 3] = (x - P.width / 2 + rand(-0.5, 0.5)) * k;
                     pos[j * 3 + 1] = (P.height / 2 - y + rand(-0.5, 0.5)) * k;
                     pos[j * 3 + 2] = 0; // flat, like a photo
                     // soft colors: brightness from the photo mapped onto the galaxy palette, a hint of the real hue
-                    let r = raw[o + 4] / 255, g = raw[o + 5] / 255, b = raw[o + 6] / 255;
-                    let lum = 0.3 * r + 0.59 * g + 0.11 * b;
-                    let bottomFade = THREE.MathUtils.smoothstep((P.height - y) / P.height, 0, 0.18);
-                    let real = [r, g, b];
+                    let real = [4, 5, 6].map(c => Math.min(1, raw[o + c] / 255 * gain));
+                    let l = Math.min(1, lum(raw, o) * gain);
+                    let bottomFade = THREE.MathUtils.smoothstep((P.height - y) / P.height, 0, 0.06);
                     for (let c = 0; c < 3; c++) {
-                        let pal = dark[c] + (light[c] - dark[c]) * lum;
-                        col[j * 3 + c] = (pal * 0.8 + real[c] * 0.2) * 0.65 * bottomFade;
-                        srcCol[j * 3 + c] = a.aColor.array[i * 3 + c];
+                        let pal = dark[c] + (light[c] - dark[c]) * l;
+                        col[j * 3 + c] = (pal * 0.8 + real[c] * 0.2) * 0.65 * bottomFade * density;
                     }
+                }
+                return { pos, col };
+            };
+            images = photos.map(layout);
+            let srcCol = new Float32Array(n * 3);
+            let side = new Float32Array(n * 3), sizeFrom = new Float32Array(n), sizeTo = new Float32Array(n), delay = new Float32Array(n);
+            let v = new THREE.Vector3(), j = 0;
+            for (let obj of sources) {
+                let a = obj.geometry.attributes, srcSize = obj.material.uniforms.uSize.value;
+                for (let i = 0; i < a.position.count; i++, j++) {
+                    for (let c = 0; c < 3; c++) srcCol[j * 3 + c] = a.aColor.array[i * 3 + c];
                     v.randomDirection();
                     side[j * 3] = v.x; side[j * 3 + 1] = v.y; side[j * 3 + 2] = v.z;
                     sizeFrom[j] = a.aSize.array[i] * srcSize;
@@ -892,8 +914,11 @@
                 }
             }
             let geo = new THREE.BufferGeometry();
-            geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-            geo.setAttribute("aColor", new THREE.BufferAttribute(col, 3));
+            // position / aColor = the photo being shown, aPrevPos / aPrevColor = the one the stars come from
+            geo.setAttribute("position", new THREE.BufferAttribute(images[0].pos.slice(), 3));
+            geo.setAttribute("aColor", new THREE.BufferAttribute(images[0].col.slice(), 3));
+            geo.setAttribute("aPrevPos", new THREE.BufferAttribute(images[0].pos.slice(), 3));
+            geo.setAttribute("aPrevColor", new THREE.BufferAttribute(images[0].col.slice(), 3));
             geo.setAttribute("aSrcColor", new THREE.BufferAttribute(srcCol, 3));
             geo.setAttribute("aSide", new THREE.BufferAttribute(side, 3));
             geo.setAttribute("aSizeFrom", new THREE.BufferAttribute(sizeFrom, 1));
@@ -904,15 +929,19 @@
                 uniforms: {
                     uTime: gu.time,
                     uMorph: morph,
+                    uSwap: swap,
                     uScale: gu.scale,
                     uTo: { value: new THREE.Matrix4() }
                 },
                 vertexShader: `
                     uniform float uTime;
                     uniform float uMorph;
+                    uniform float uSwap;
                     uniform float uScale;
                     uniform mat4 uTo;
                     attribute vec3 aColor;
+                    attribute vec3 aPrevPos;
+                    attribute vec3 aPrevColor;
                     attribute vec3 aSrcColor;
                     attribute vec3 aSide;
                     attribute vec3 aFrom;
@@ -921,16 +950,25 @@
                     attribute float aDelay;
                     varying vec3 vColor;
                     void main() {
-                        float k = clamp((uMorph - aDelay * 0.45) / 0.55, 0., 1.);
+                        // opening the chest: every star bursts outward at once (first 30%), hangs there briefly,
+                        // then they gather into the first photo one after another
+                        float b = clamp(uMorph / 0.3, 0., 1.);
+                        b = 1. - (1. - b) * (1. - b) * (1. - b);
+                        float k = clamp((uMorph - 0.32 - aDelay * 0.3) / 0.38, 0., 1.);
                         k = k * k * (3. - 2. * k);
-                        vec3 local = position + vec3(sin(uTime * 0.7 + aDelay * 40.), cos(uTime * 0.6 + aDelay * 30.), 0.) * 0.03;
+                        // photo -> next photo: same staggered timing and outward swing as the first morph
+                        float s = clamp((uSwap - aDelay * 0.45) / 0.55, 0., 1.);
+                        s = s * s * (3. - 2. * s);
+                        vec3 photo = mix(aPrevPos, position, s) + aSide * sin(s * 3.14159) * 3.;
+                        vec3 local = photo + vec3(sin(uTime * 0.7 + aDelay * 40.), cos(uTime * 0.6 + aDelay * 30.), 0.) * 0.03;
                         vec3 to = (uTo * vec4(local, 1.)).xyz;
                         // fly from its place in the heart / scale / chest to the portrait, swinging out on the way
-                        vec3 p = mix(aFrom, to, k) + aSide * sin(k * 3.14159) * 3.;
+                        vec3 burst = aFrom + aSide * (7. + aDelay * 9.) * b;
+                        vec3 p = mix(burst, to, k) + aSide * sin(k * 3.14159) * 1.5;
                         vec4 mv = modelViewMatrix * vec4(p, 1.);
                         gl_PointSize = mix(aSizeFrom, aSizeTo, k) * uScale / -mv.z;
                         gl_Position = projectionMatrix * mv;
-                        vColor = mix(aSrcColor, aColor, k);
+                        vColor = mix(aSrcColor, mix(aPrevColor, aColor, s), k);
                     }
                 `,
                 fragmentShader: `
@@ -1031,20 +1069,40 @@
                 }
             }
             from.needsUpdate = true;
+            showImage(0, false); // every opening starts again from the first photo
             // the portrait faces the camera at click time, then belongs to the model
             let up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
             let M = new THREE.Matrix4().compose(controls.target.clone().addScaledVector(up, PORTRAIT_LIFT),
                 camera.quaternion, new THREE.Vector3(1, 1, 1));
             portrait.material.uniforms.uTo.value.multiplyMatrices(toLocal, M);
         };
-        let toggleMorph = () => {
+        // Make photo i the target; animate = the stars fly there from wherever the current photo puts them
+        let showImage = (i, animate) => {
+            let a = portrait.geometry.attributes;
+            if (animate) {
+                a.aPrevPos.array.set(a.position.array);
+                a.aPrevColor.array.set(a.aColor.array);
+            } else {
+                a.aPrevPos.array.set(images[i].pos);
+                a.aPrevColor.array.set(images[i].col);
+            }
+            a.position.array.set(images[i].pos);
+            a.aColor.array.set(images[i].col);
+            for (let name of ["position", "aColor", "aPrevPos", "aPrevColor"]) a[name].needsUpdate = true;
+            imageIndex = i;
+            imageClock = 0;
+            swap.value = animate ? 0 : 1;
+        };
+        // one-way: once the chest is opened the photos keep cycling (no way back to the heart)
+        let openPortrait = () => {
             if (!portrait) {
                 console.warn("Không tìm thấy dữ liệu ảnh (img/tkl.points.js). Chạy tools/make-portrait.mjs để tạo.");
                 return;
             }
             if (gu.progress.value < 1) return; // wait until the galaxy has fully formed
-            if (!morphTarget && morph.value <= 0) beginMorph();
-            morphTarget = morphTarget ? 0 : 1;
+            if (morphTarget) return;
+            beginMorph();
+            morphTarget = 1;
         };
 
         // ---------- rotation by keys / buttons ----------
@@ -1098,7 +1156,6 @@
             if (keyMap[e.code]) { input[keyMap[e.code]] = true; e.preventDefault(); }
             if (e.code === "KeyR") resetView();
             if (e.code === "KeyP") togglePause();
-            if (e.code === "Escape" && morphTarget) toggleMorph();
         });
         window.addEventListener("keyup", e => {
             if (keyMap[e.code]) input[keyMap[e.code]] = false;
@@ -1143,11 +1200,11 @@
             velY = THREE.MathUtils.clamp(dx * DRAG_SPEED / mdt, -8, 8);
         });
         let endPointer = e => {
-            // a short tap without moving = click: chest -> portrait; any tap while it is shown -> back
+            // a short tap without moving on the chest = click: chest -> portrait
             if (e.type === "pointerup" && down && pointers.size === 1 &&
                 Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && performance.now() - down.t < 500 &&
-                (morphTarget || hitsChest(e))) {
-                toggleMorph();
+                !morphTarget && hitsChest(e)) {
+                openPortrait();
             }
             pointers.delete(e.pointerId);
             if (pointers.size === 0) {
@@ -1210,16 +1267,23 @@
             heart.material.uniforms.uBeat.value = 1 + 0.06 * beat;
             // Star portrait morph: the heart / scale / chest are hidden while their dots form the person
             if (portrait) {
-                morph.value = THREE.MathUtils.clamp(morph.value + (morphTarget ? 1 : -1) * dt / MORPH_DURATION, 0, 1);
+                morph.value = THREE.MathUtils.clamp(morph.value + (morphTarget ? 1 : -1) * dt / OPEN_DURATION, 0, 1);
                 portrait.visible = morph.value > 0;
                 heart.visible = !portrait.visible;
                 if (morphTarget && morph.value < 1) { // pull the camera back so the whole portrait fits
                     let off = camera.position.clone().sub(controls.target), L = off.length();
-                    if (L < 30) camera.position.copy(controls.target).addScaledVector(off.normalize(), L + (30 - L) * (1 - Math.exp(-dt * 2)));
+                    if (L < 33) camera.position.copy(controls.target).addScaledVector(off.normalize(), L + (33 - L) * (1 - Math.exp(-dt * 2)));
+                }
+                // slideshow: each photo stays IMAGE_SECONDS (counted from when it starts forming), then the next
+                swap.value = Math.min(swap.value + dt / MORPH_DURATION, 1);
+                if (morphTarget && images.length > 1) {
+                    imageClock += dt;
+                    if (imageClock >= IMAGE_SECONDS && swap.value >= 1) showImage((imageIndex + 1) % images.length, true);
                 }
             }
-            // fountain: strong burst while the dots fly, a gentle stream while the portrait is shown
-            let wantPower = morph.value > 0 && morph.value < 1 ? 1 : morphTarget ? 0.3 : 0;
+            // fountain: strong burst while the dots fly (first morph or photo change), a gentle stream while shown
+            let flying = (morph.value > 0 && morph.value < 1) || (morphTarget && swap.value < 1);
+            let wantPower = flying ? 1 : morphTarget ? 0.3 : 0;
             fountainPower += (wantPower - fountainPower) * (1 - Math.exp(-dt * 3));
             fountain.material.uniforms.uPower.value = fountainPower;
             fountain.material.uniforms.uClock.value = elapsed;

@@ -285,7 +285,8 @@ export const mockApi: Api = {
     await wait(200);
     const user = users.find((u) => u.id === id);
     if (!user) throw new Error("Không tìm thấy người dùng");
-    Object.assign(user, patch);
+    const { password: _password, ...rest } = patch;
+    Object.assign(user, rest);
     return { ...user };
   },
 };

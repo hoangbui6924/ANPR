@@ -63,7 +63,8 @@ const realApi = {
 
   users: () => request<User[]>("/api/users"),
   addUser: (u: NewUser) => request<User>("/api/users", { method: "POST", body: JSON.stringify(u) }),
-  updateUser: (id: number, patch: Partial<Pick<User, "fullName" | "role" | "active">>) =>
+  // password: admin sets a new password for the account (stored hashed, so the old one can never be shown)
+  updateUser: (id: number, patch: Partial<Pick<User, "fullName" | "role" | "active">> & { password?: string }) =>
     request<User>(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(patch) }),
 };
 
